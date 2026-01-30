@@ -1,3 +1,5 @@
+import "./globals.css";
+
 export const metadata = {
   title: "AI Agent Orchestration Platform",
   description: "Visual AI Agent workflow orchestration tool",
@@ -10,7 +12,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
