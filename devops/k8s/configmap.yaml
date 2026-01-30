@@ -1,0 +1,167 @@
+# AI Agent Platform - ConfigMap Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-agent-config
+  namespace: ai-agent-prod
+data:
+  # ========== 应用基础配置 ==========
+  APP_ENV: "production"
+  APP_NAME: "AI Agent Platform"
+  APP_VERSION: "1.0.0"
+  APP_PORT: "3000"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  
+  # ========== 数据库配置 ==========
+  DB_HOST: "postgresql.ai-agent-prod.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "ai_agent"
+  DB_POOL_MIN: "5"
+  DB_POOL_MAX: "20"
+  DB_SSL_ENABLED: "false"
+  
+  # ========== Redis配置 ==========
+  REDIS_HOST: "redis-master.ai-agent-prod.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_CLUSTER_ENABLED: "false"
+  
+  # ========== RabbitMQ配置 ==========
+  RABBITMQ_HOST: "rabbitmq.ai-agent-prod.svc.cluster.local"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_VHOST: "/"
+  RABBITMQ_HEARTBEAT: "60"
+  
+  # ========== 执行引擎配置 ==========
+  ENGINE_WORKERS: "4"
+  ENGINE_TIMEOUT: "300"
+  MAX_CONCURRENT_JOBS: "100"
+  JOB_QUEUE_NAME: "ai_agent_jobs"
+  DEAD_LETTER_QUEUE: "ai_agent_dlq"
+  
+  # ========== LLM配置 ==========
+  LLM_TIMEOUT: "60"
+  LLM_MAX_RETRIES: "3"
+  LLM_RATE_LIMIT: "100"
+  LLM_DEFAULT_PROVIDER: "openai"
+  
+  # ========== 安全配置 ==========
+  CORS_ORIGINS: "https://ai-agent.your-company.com"
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_RPM: "100"
+  
+  # ========== 监控配置 ==========
+  METRICS_ENABLED: "true"
+  METRICS_PORT: "9090"
+  METRICS_PATH: "/metrics"
+  TRACING_ENABLED: "true"
+  JAEGER_ENDPOINT: "http://jaeger-collector.monitoring.svc.cluster.local:14268/api/traces"
+  
+  # ========== 存储配置 ==========
+  STORAGE_TYPE: "s3"
+  S3_ENDPOINT: ""
+  S3_BUCKET: "ai-agent-storage"
+  S3_REGION: "us-west-2"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: ai-agent-prod
+data:
+  nginx.conf: |
+    user nginx;
+    worker_processes auto;
+    error_log /var/log/nginx/error.log warn;
+    pid /var/run/nginx.pid;
+
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for"';
+
+        access_log /var/log/nginx/access.log main;
+
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+
+        # Gzip压缩
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+
+        # 限流配置
+        limit_req_zone $binary_remote_addr zone=api:10m rate=100r/m;
+        limit_req_zone $binary_remote_addr zone=ws:10m rate=1000r/m;
+
+        server {
+            listen 80;
+            server_name localhost;
+            root /usr/share/nginx/html;
+            index index.html;
+
+            # 健康检查
+            location /health {
+                access_log off;
+                return 200 "healthy\n";
+                add_header Content-Type text/plain;
+            }
+
+            # API代理
+            location /api/ {
+                limit_req zone=api burst=20 nodelay;
+                proxy_pass http://backend-api:3000/;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_cache_bypass $http_upgrade;
+                proxy_connect_timeout 30s;
+                proxy_send_timeout 30s;
+                proxy_read_timeout 30s;
+            }
+
+            # WebSocket代理
+            location /ws/ {
+                limit_req zone=ws burst=100 nodelay;
+                proxy_pass http://websocket-gateway:8080/;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_read_timeout 86400s;
+                proxy_send_timeout 86400s;
+            }
+
+            # 静态资源缓存
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+                expires 1y;
+                add_header Cache-Control "public, immutable";
+                add_header X-Content-Type-Options nosniff;
+            }
+
+            # 前端路由
+            location / {
+                try_files $uri $uri/ /index.html;
+                add_header X-Frame-Options "SAMEORIGIN";
+                add_header X-XSS-Protection "1; mode=block";
+                add_header X-Content-Type-Options "nosniff";
+            }
+        }
+    }

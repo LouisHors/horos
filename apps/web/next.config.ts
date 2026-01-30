@@ -4,8 +4,9 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  eslint: {
-    ignoreDuringBuilds: false,
+  transpilePackages: ["@ai-agent/core"],
+  turbopack: {
+    root: "/Users/zego/Demo_Hors/horos",
   },
 };
 

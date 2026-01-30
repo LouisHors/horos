@@ -1,0 +1,211 @@
+# AI Agent Platform - AlertManager Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      # SMTP配置
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'alerts@your-company.com'
+      smtp_auth_username: 'alerts@your-company.com'
+      smtp_auth_password: 'your-smtp-password'
+      smtp_require_tls: true
+      
+      # Slack配置
+      slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+      
+      # PagerDuty配置
+      pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+      
+      # 通用配置
+      resolve_timeout: 5m
+
+    # 路由树配置
+    route:
+      receiver: 'default'
+      group_by: ['alertname', 'severity', 'team']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 4h
+      
+      routes:
+        # 严重告警路由
+        - match:
+            severity: critical
+          receiver: 'critical-alerts'
+          group_wait: 0s
+          group_interval: 5m
+          repeat_interval: 1h
+          continue: true
+        
+        # 警告告警路由
+        - match:
+            severity: warning
+          receiver: 'warning-alerts'
+          group_wait: 30s
+          group_interval: 10m
+          repeat_interval: 4h
+          continue: true
+        
+        # 基础设施告警路由
+        - match:
+            team: infrastructure
+          receiver: 'infrastructure-team'
+          group_wait: 30s
+          continue: true
+        
+        # 数据库告警路由
+        - match:
+            team: database
+          receiver: 'database-team'
+          group_wait: 30s
+          continue: true
+        
+        # 平台告警路由
+        - match:
+            team: platform
+          receiver: 'platform-team'
+          group_wait: 30s
+          continue: true
+
+    # 抑制规则
+    inhibit_rules:
+      # 严重告警抑制警告告警
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'instance']
+      
+      # 相同告警抑制
+      - source_match:
+          alertname: 'PodCrashLooping'
+        target_match:
+          alertname: 'PodNotReady'
+        equal: ['pod', 'namespace']
+
+    # 接收器配置
+    receivers:
+      - name: 'default'
+        slack_configs:
+          - channel: '#alerts'
+            title: '🔔 {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              *Instance:* {{ .Labels.instance }}
+              {{ end }}
+            send_resolved: true
+
+      - name: 'critical-alerts'
+        slack_configs:
+          - channel: '#critical-alerts'
+            title: '🔴 CRITICAL: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              *Instance:* {{ .Labels.instance }}
+              *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+              {{ end }}
+            send_resolved: true
+            color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        
+        email_configs:
+          - to: 'oncall@your-company.com'
+            subject: '🔴 CRITICAL Alert: {{ .GroupLabels.alertname }}'
+            body: |
+              {{ range .Alerts }}
+              Alert: {{ .Annotations.summary }}
+              Description: {{ .Annotations.description }}
+              Severity: {{ .Labels.severity }}
+              Instance: {{ .Labels.instance }}
+              Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+              
+              Labels:
+              {{ range .Labels.SortedPairs }}
+                {{ .Name }}: {{ .Value }}
+              {{ end }}
+              {{ end }}
+            send_resolved: true
+        
+        pagerduty_configs:
+          - service_key: 'your-pagerduty-service-key'
+            severity: critical
+            description: '{{ .GroupLabels.alertname }}'
+            details:
+              firing: '{{ template "pagerduty.default.instances" .Alerts.Firing }}'
+              resolved: '{{ template "pagerduty.default.instances" .Alerts.Resolved }}'
+              num_firing: '{{ .Alerts.Firing | len }}'
+              num_resolved: '{{ .Alerts.Resolved | len }}'
+
+      - name: 'warning-alerts'
+        slack_configs:
+          - channel: '#warnings'
+            title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              *Instance:* {{ .Labels.instance }}
+              {{ end }}
+            send_resolved: true
+            color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+
+      - name: 'infrastructure-team'
+        slack_configs:
+          - channel: '#infrastructure-alerts'
+            title: '🖥️ Infrastructure: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Instance:* {{ .Labels.instance }}
+              {{ end }}
+            send_resolved: true
+        
+        email_configs:
+          - to: 'infrastructure@your-company.com'
+            subject: 'Infrastructure Alert: {{ .GroupLabels.alertname }}'
+            send_resolved: true
+
+      - name: 'database-team'
+        slack_configs:
+          - channel: '#database-alerts'
+            title: '🗄️ Database: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Instance:* {{ .Labels.instance }}
+              {{ end }}
+            send_resolved: true
+        
+        email_configs:
+          - to: 'database@your-company.com'
+            subject: 'Database Alert: {{ .GroupLabels.alertname }}'
+            send_resolved: true
+
+      - name: 'platform-team'
+        slack_configs:
+          - channel: '#platform-alerts'
+            title: '🚀 Platform: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Service:* {{ .Labels.service }}
+              *Instance:* {{ .Labels.instance }}
+              {{ end }}
+            send_resolved: true
+
+    # 模板配置
+    templates:
+      - '/etc/alertmanager/templates/*.tmpl'

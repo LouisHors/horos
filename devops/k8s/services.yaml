@@ -1,0 +1,116 @@
+# AI Agent Platform - Services Configuration
+apiVersion: v1
+kind: Service
+metadata:
+  name: websocket-gateway
+  namespace: ai-agent-prod
+  labels:
+    app: websocket-gateway
+    component: gateway
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: websocket
+  selector:
+    app: websocket-gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scheduler
+  namespace: ai-agent-prod
+  labels:
+    app: scheduler
+    component: scheduler
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8081
+      targetPort: 8081
+      protocol: TCP
+      name: http
+  selector:
+    app: scheduler
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker
+  namespace: ai-agent-prod
+  labels:
+    app: worker
+    component: worker
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  ports:
+    - port: 8082
+      targetPort: 8082
+      protocol: TCP
+      name: http
+  selector:
+    app: worker
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-proxy
+  namespace: ai-agent-prod
+  labels:
+    app: llm-proxy
+    component: proxy
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8083
+      targetPort: 8083
+      protocol: TCP
+      name: http
+  selector:
+    app: llm-proxy
+---
+# External Services (for dependencies)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+  namespace: ai-agent-prod
+  labels:
+    app: postgresql
+    component: database
+spec:
+  type: ExternalName
+  externalName: postgresql.ai-agent-prod.svc.cluster.local
+  ports:
+    - port: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-master
+  namespace: ai-agent-prod
+  labels:
+    app: redis
+    component: cache
+spec:
+  type: ExternalName
+  externalName: redis-master.ai-agent-prod.svc.cluster.local
+  ports:
+    - port: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: ai-agent-prod
+  labels:
+    app: rabbitmq
+    component: message-queue
+spec:
+  type: ExternalName
+  externalName: rabbitmq.ai-agent-prod.svc.cluster.local
+  ports:
+    - port: 5672

@@ -1,0 +1,443 @@
+# AI Agent Platform - CI/CD Pipeline
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main, develop]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/ai-agent-platform
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==================== 代码质量检查 ====================
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run Prettier check
+        run: npm run format:check
+
+  # ==================== 安全扫描 ====================
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  # ==================== 单元测试 ====================
+  unit-test:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit -- --coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+
+  # ==================== 集成测试 ====================
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: [unit-test]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: ai_agent_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+      rabbitmq:
+        image: rabbitmq:3-alpine
+        ports:
+          - 5672:5672
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: ai_agent_test
+          DB_USER: test
+          DB_PASSWORD: test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          RABBITMQ_HOST: localhost
+          RABBITMQ_PORT: 5672
+
+  # ==================== 构建镜像 ====================
+  build:
+    needs: [security-scan, unit-test]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [frontend, backend-api, execution-engine]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=,suffix=,format=short
+          labels: |
+            org.opencontainers.image.title=${{ matrix.service }}
+            org.opencontainers.image.description=AI Agent Platform - ${{ matrix.service }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  # ==================== 部署到开发环境 ====================
+  deploy-dev:
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+      url: https://ai-agent-dev.your-company.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ai-agent-dev-cluster
+
+      - name: Deploy to development
+        run: |
+          kubectl set image deployment/frontend \
+            frontend=${{ env.IMAGE_PREFIX }}/frontend:${{ github.sha }} \
+            -n ai-agent-dev
+          kubectl set image deployment/backend-api \
+            backend-api=${{ env.IMAGE_PREFIX }}/backend-api:${{ github.sha }} \
+            -n ai-agent-dev
+          kubectl set image deployment/execution-engine \
+            execution-engine=${{ env.IMAGE_PREFIX }}/execution-engine:${{ github.sha }} \
+            -n ai-agent-dev
+          
+          kubectl rollout status deployment/frontend -n ai-agent-dev --timeout=300s
+          kubectl rollout status deployment/backend-api -n ai-agent-dev --timeout=300s
+          kubectl rollout status deployment/execution-engine -n ai-agent-dev --timeout=300s
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n ai-agent-dev
+          kubectl get svc -n ai-agent-dev
+
+  # ==================== 部署到测试环境 ====================
+  deploy-staging:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://ai-agent-staging.your-company.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ai-agent-staging-cluster
+
+      - name: Deploy to staging
+        run: |
+          kubectl set image deployment/frontend \
+            frontend=${{ env.IMAGE_PREFIX }}/frontend:${{ github.sha }} \
+            -n ai-agent-staging
+          kubectl set image deployment/backend-api \
+            backend-api=${{ env.IMAGE_PREFIX }}/backend-api:${{ github.sha }} \
+            -n ai-agent-staging
+          kubectl set image deployment/execution-engine \
+            execution-engine=${{ env.IMAGE_PREFIX }}/execution-engine:${{ github.sha }} \
+            -n ai-agent-staging
+          
+          kubectl rollout status deployment/frontend -n ai-agent-staging --timeout=300s
+          kubectl rollout status deployment/backend-api -n ai-agent-staging --timeout=300s
+          kubectl rollout status deployment/execution-engine -n ai-agent-staging --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          npm install -g newman
+          newman run tests/smoke-tests.json \
+            --env-var baseUrl=https://ai-agent-staging.your-company.com
+
+      - name: Run API tests
+        run: |
+          newman run tests/api-tests.json \
+            --env-var baseUrl=https://api.ai-agent-staging.your-company.com
+
+  # ==================== 部署到生产环境 (金丝雀发布) ====================
+  deploy-production:
+    needs: [build, deploy-staging]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://ai-agent.your-company.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ai-agent-prod-cluster
+
+      - name: Deploy canary (10%)
+        run: |
+          # 创建金丝雀部署
+          kubectl apply -f k8s/canary/frontend-canary.yaml
+          kubectl apply -f k8s/canary/backend-canary.yaml
+          
+          # 更新金丝雀镜像
+          kubectl set image deployment/frontend-canary \
+            frontend=${{ env.IMAGE_PREFIX }}/frontend:${{ github.ref_name }} \
+            -n ai-agent-prod
+          kubectl set image deployment/backend-api-canary \
+            backend-api=${{ env.IMAGE_PREFIX }}/backend-api:${{ github.ref_name }} \
+            -n ai-agent-prod
+          
+          # 设置10%流量
+          kubectl patch virtualservice ai-agent-vs -n ai-agent-prod \
+            --type merge -p '{"spec":{"http":[{"route":[{"destination":{"host":"frontend","subset":"stable"},"weight":90},{"destination":{"host":"frontend","subset":"canary"},"weight":10}]}]}}'
+
+      - name: Wait and verify canary
+        run: |
+          echo "Waiting 5 minutes for canary observation..."
+          sleep 300
+          
+          # 检查错误率
+          ERROR_RATE=$(curl -s "https://prometheus/api/v1/query?query=rate(http_requests_total{status=~\"5..\"}[5m])" | jq -r '.data.result[0].value[1] // "0"')
+          echo "Current error rate: $ERROR_RATE"
+          
+          if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+            echo "❌ Error rate too high, rolling back canary..."
+            kubectl delete deployment frontend-canary backend-api-canary -n ai-agent-prod
+            exit 1
+          fi
+          echo "✅ Canary deployment looks good"
+
+      - name: Full deployment
+        run: |
+          # 全量部署
+          kubectl set image deployment/frontend \
+            frontend=${{ env.IMAGE_PREFIX }}/frontend:${{ github.ref_name }} \
+            -n ai-agent-prod
+          kubectl set image deployment/backend-api \
+            backend-api=${{ env.IMAGE_PREFIX }}/backend-api:${{ github.ref_name }} \
+            -n ai-agent-prod
+          kubectl set image deployment/execution-engine \
+            execution-engine=${{ env.IMAGE_PREFIX }}/execution-engine:${{ github.ref_name }} \
+            -n ai-agent-prod
+          
+          kubectl rollout status deployment/frontend -n ai-agent-prod --timeout=300s
+          kubectl rollout status deployment/backend-api -n ai-agent-prod --timeout=300s
+          kubectl rollout status deployment/execution-engine -n ai-agent-prod --timeout=300s
+          
+          # 删除金丝雀
+          kubectl delete deployment frontend-canary backend-api-canary -n ai-agent-prod --ignore-not-found
+
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "🚀 Production deployment completed successfully!",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "✅ Production Deployment"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Version:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Deployed by:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*URL:* https://ai-agent.your-company.com"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "❌ Production deployment failed!",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "❌ Deployment Failed"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Version: ${{ github.ref_name }}\nCheck the workflow logs for details."
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

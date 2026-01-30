@@ -1,0 +1,49 @@
+# AI Agent Platform - Kustomization Base
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ai-agent-prod
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - frontend-deployment.yaml
+  - backend-deployment.yaml
+  - engine-deployment.yaml
+  - services.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - storage.yaml
+
+commonLabels:
+  app.kubernetes.io/name: ai-agent-platform
+  app.kubernetes.io/version: "1.0.0"
+  app.kubernetes.io/managed-by: kustomize
+
+commonAnnotations:
+  app.kubernetes.io/created-by: "DevOps Team"
+  app.kubernetes.io/description: "AI Agent Platform - Visual Workflow Orchestration Tool"
+
+images:
+  - name: frontend
+    newName: your-registry.com/ai-agent-platform/frontend
+    newTag: v1.0.0
+  - name: backend-api
+    newName: your-registry.com/ai-agent-platform/backend-api
+    newTag: v1.0.0
+  - name: execution-engine
+    newName: your-registry.com/ai-agent-platform/execution-engine
+    newTag: v1.0.0
+
+configMapGenerator:
+  - name: ai-agent-config
+    behavior: merge
+    literals:
+      - APP_ENV=production
+
+secretGenerator:
+  - name: ai-agent-secrets
+    behavior: merge
+    envs:
+      - secrets.env

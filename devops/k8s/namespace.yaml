@@ -1,0 +1,41 @@
+# AI Agent Platform - Kubernetes Namespaces
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-agent-dev
+  labels:
+    environment: development
+    app.kubernetes.io/name: ai-agent-platform
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-agent-staging
+  labels:
+    environment: staging
+    app.kubernetes.io/name: ai-agent-platform
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-agent-prod
+  labels:
+    environment: production
+    app.kubernetes.io/name: ai-agent-platform
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app.kubernetes.io/name: monitoring
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logging
+  labels:
+    app.kubernetes.io/name: logging

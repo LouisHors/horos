@@ -1,0 +1,298 @@
+# AI Agent Platform - Docker Compose (开发环境)
+version: '3.8'
+
+services:
+  # ========== 前端服务 ==========
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ai-agent-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+      - REACT_APP_WS_URL=ws://localhost:8081
+    depends_on:
+      - backend-api
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+
+  # ========== 后端API服务 ==========
+  backend-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-agent-backend
+    ports:
+      - "8080:3000"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=postgresql
+      - DB_PORT=5432
+      - DB_NAME=ai_agent
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+      - JWT_SECRET=dev-secret-key-change-in-production
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ========== 执行引擎 ==========
+  execution-engine:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile
+    container_name: ai-agent-engine
+    ports:
+      - "8082:8000"
+    environment:
+      - ENV=development
+      - API_URL=http://backend-api:3000
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - DB_URL=postgresql://postgres:postgres@postgresql:5432/ai_agent
+      - ENGINE_WORKERS=4
+      - ENGINE_TIMEOUT=300
+    depends_on:
+      - postgresql
+      - redis
+      - rabbitmq
+      - backend-api
+    volumes:
+      - ./engine:/app
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ========== 任务调度器 ==========
+  scheduler:
+    build:
+      context: ./scheduler
+      dockerfile: Dockerfile
+    container_name: ai-agent-scheduler
+    environment:
+      - ENV=development
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - DB_URL=postgresql://postgres:postgres@postgresql:5432/ai_agent
+    depends_on:
+      - redis
+      - rabbitmq
+      - postgresql
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+
+  # ========== 异步任务Worker ==========
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: ai-agent-worker
+    environment:
+      - ENV=development
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - DB_URL=postgresql://postgres:postgres@postgresql:5432/ai_agent
+      - LLM_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      - redis
+      - rabbitmq
+      - postgresql
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+  # ========== PostgreSQL数据库 ==========
+  postgresql:
+    image: postgres:15-alpine
+    container_name: ai-agent-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=ai_agent
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== Redis缓存 ==========
+  redis:
+    image: redis:7-alpine
+    container_name: ai-agent-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # ========== RabbitMQ消息队列 ==========
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ai-agent-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  # ========== MinIO对象存储 ==========
+  minio:
+    image: minio/minio:latest
+    container_name: ai-agent-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+
+  # ========== Nginx反向代理 ==========
+  nginx:
+    image: nginx:alpine
+    container_name: ai-agent-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - frontend
+      - backend-api
+      - execution-engine
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+
+  # ========== 监控 - Prometheus ==========
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ai-agent-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+
+  # ========== 监控 - Grafana ==========
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ai-agent-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+
+  # ========== 日志收集 - Loki ==========
+  loki:
+    image: grafana/loki:latest
+    container_name: ai-agent-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  minio_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  ai-agent-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,389 @@
+# AI Agent Platform - Prometheus Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: ai-agent-prod
+        replica: '{{.ExternalURL}}'
+
+    # 告警规则文件
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+    # 告警管理器配置
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: ['alertmanager:9093']
+
+    # 数据采集配置
+    scrape_configs:
+      # Prometheus自身监控
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      # Kubernetes API Server
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+          - role: endpoints
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+
+      # Kubernetes Nodes (Kubelet)
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics
+
+      # Kubernetes Nodes (cAdvisor)
+      - job_name: 'kubernetes-nodes-cadvisor'
+        kubernetes_sd_configs:
+          - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+
+      # Kubernetes Service Endpoints
+      - job_name: 'kubernetes-service-endpoints'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+            action: replace
+            target_label: __scheme__
+            regex: (https?)
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+          - action: labelmap
+            regex: __meta_kubernetes_service_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_service_name]
+            action: replace
+            target_label: kubernetes_name
+
+      # Kubernetes Pods
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+      # AI Agent Platform 应用指标
+      - job_name: 'ai-agent-backend'
+        static_configs:
+          - targets: ['backend-api.ai-agent-prod.svc.cluster.local:3000']
+        metrics_path: /metrics
+        scrape_interval: 10s
+        scrape_timeout: 5s
+
+      - job_name: 'ai-agent-engine'
+        static_configs:
+          - targets: ['execution-engine.ai-agent-prod.svc.cluster.local:8000']
+        metrics_path: /metrics
+        scrape_interval: 10s
+        scrape_timeout: 5s
+
+      # 数据库指标
+      - job_name: 'postgresql-exporter'
+        static_configs:
+          - targets: ['postgres-exporter.monitoring.svc.cluster.local:9187']
+
+      # 缓存指标
+      - job_name: 'redis-exporter'
+        static_configs:
+          - targets: ['redis-exporter.monitoring.svc.cluster.local:9121']
+
+      # 消息队列指标
+      - job_name: 'rabbitmq-exporter'
+        static_configs:
+          - targets: ['rabbitmq-exporter.monitoring.svc.cluster.local:9419']
+
+      # Nginx Ingress 指标
+      - job_name: 'nginx-ingress'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - ingress-nginx
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            action: keep
+            regex: ingress-nginx
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            action: keep
+            regex: controller
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: (.+)
+            replacement: ${1}:10254
+
+  # 告警规则
+  alert_rules.yml: |
+    groups:
+      - name: ai-agent-alerts
+        rules:
+          # ========== 应用健康告警 ==========
+          - alert: ServiceDown
+            expr: up{job=~"ai-agent-.*"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              team: platform
+            annotations:
+              summary: "Service {{ $labels.job }} is down"
+              description: "Service {{ $labels.job }} has been down for more than 1 minute"
+
+          - alert: HighErrorRate
+            expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+            for: 2m
+            labels:
+              severity: critical
+              team: platform
+            annotations:
+              summary: "High error rate on {{ $labels.service }}"
+              description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.service }}"
+
+          - alert: HighLatency
+            expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+            for: 5m
+            labels:
+              severity: warning
+              team: platform
+            annotations:
+              summary: "High latency on {{ $labels.service }}"
+              description: "95th percentile latency is {{ $value }}s for {{ $labels.service }}"
+
+          - alert: HighRequestRate
+            expr: rate(http_requests_total[1m]) > 1000
+            for: 5m
+            labels:
+              severity: warning
+              team: platform
+            annotations:
+              summary: "High request rate on {{ $labels.service }}"
+              description: "Request rate is {{ $value }}/s for {{ $labels.service }}"
+
+          # ========== Pod告警 ==========
+          - alert: PodCrashLooping
+            expr: rate(kube_pod_container_status_restarts_total[10m]) > 0
+            for: 5m
+            labels:
+              severity: critical
+              team: platform
+            annotations:
+              summary: "Pod {{ $labels.pod }} is crash looping"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting frequently"
+
+          - alert: PodNotReady
+            expr: kube_pod_status_phase{phase=~"Pending|Unknown|Failed"} == 1
+            for: 5m
+            labels:
+              severity: warning
+              team: platform
+            annotations:
+              summary: "Pod {{ $labels.pod }} is not ready"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been in {{ $labels.phase }} state for 5 minutes"
+
+          - alert: HighMemoryUsage
+            expr: (container_memory_usage_bytes{container!=""} / container_spec_memory_limit_bytes{container!=""}) > 0.85
+            for: 5m
+            labels:
+              severity: warning
+              team: platform
+            annotations:
+              summary: "High memory usage on {{ $labels.pod }}"
+              description: "Memory usage is {{ $value | humanizePercentage }} for {{ $labels.pod }}"
+
+          - alert: HighCPUUsage
+            expr: (rate(container_cpu_usage_seconds_total{container!=""}[5m]) / container_spec_cpu_quota{container!=""} * 100) > 80
+            for: 5m
+            labels:
+              severity: warning
+              team: platform
+            annotations:
+              summary: "High CPU usage on {{ $labels.pod }}"
+              description: "CPU usage is {{ $value }}% for {{ $labels.pod }}"
+
+          # ========== 执行引擎告警 ==========
+          - alert: ExecutionEngineBacklog
+            expr: execution_engine_pending_jobs > 50
+            for: 3m
+            labels:
+              severity: warning
+              team: platform
+            annotations:
+              summary: "Execution engine task backlog"
+              description: "There are {{ $value }} pending jobs in the execution engine"
+
+          - alert: ExecutionEngineJobFailures
+            expr: rate(execution_engine_job_failures_total[5m]) > 0.1
+            for: 2m
+            labels:
+              severity: critical
+              team: platform
+            annotations:
+              summary: "High job failure rate"
+              description: "Job failure rate is {{ $value }}/s"
+
+          - alert: ExecutionEngineStalledJobs
+            expr: execution_engine_stalled_jobs > 5
+            for: 5m
+            labels:
+              severity: warning
+              team: platform
+            annotations:
+              summary: "Stalled jobs detected"
+              description: "There are {{ $value }} stalled jobs in the execution engine"
+
+          # ========== 数据库告警 ==========
+          - alert: DatabaseConnectionPoolExhausted
+            expr: pg_stat_activity_count / pg_settings_max_connections > 0.8
+            for: 2m
+            labels:
+              severity: critical
+              team: database
+            annotations:
+              summary: "Database connection pool near exhaustion"
+              description: "{{ $value | humanizePercentage }} of database connections are in use"
+
+          - alert: DatabaseHighQueryTime
+            expr: pg_stat_statements_mean_time > 1000
+            for: 5m
+            labels:
+              severity: warning
+              team: database
+            annotations:
+              summary: "High database query time"
+              description: "Average query time is {{ $value }}ms"
+
+          - alert: DatabaseReplicationLag
+            expr: pg_replication_lag > 30
+            for: 5m
+            labels:
+              severity: warning
+              team: database
+            annotations:
+              summary: "Database replication lag"
+              description: "Replication lag is {{ $value }} seconds"
+
+          # ========== 消息队列告警 ==========
+          - alert: QueueBacklog
+            expr: rabbitmq_queue_messages > 1000
+            for: 5m
+            labels:
+              severity: warning
+              team: platform
+            annotations:
+              summary: "Message queue backlog"
+              description: "Queue {{ $labels.queue }} has {{ $value }} messages"
+
+          - alert: QueueConsumerMissing
+            expr: rabbitmq_queue_consumers == 0
+            for: 1m
+            labels:
+              severity: critical
+              team: platform
+            annotations:
+              summary: "No consumers for queue {{ $labels.queue }}"
+              description: "Queue {{ $labels.queue }} has no active consumers"
+
+          # ========== 基础设施告警 ==========
+          - alert: NodeHighMemoryUsage
+            expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.85
+            for: 5m
+            labels:
+              severity: warning
+              team: infrastructure
+            annotations:
+              summary: "High memory usage on node {{ $labels.instance }}"
+              description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+          - alert: NodeHighDiskUsage
+            expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_avail_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} > 0.85
+            for: 5m
+            labels:
+              severity: warning
+              team: infrastructure
+            annotations:
+              summary: "High disk usage on node {{ $labels.instance }}"
+              description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+          - alert: NodeHighLoad
+            expr: node_load1 / count(node_cpu_seconds_total{mode="idle"}) without (cpu,mode) > 2
+            for: 5m
+            labels:
+              severity: warning
+              team: infrastructure
+            annotations:
+              summary: "High load on node {{ $labels.instance }}"
+              description: "Load average is {{ $value }} on {{ $labels.instance }}"
