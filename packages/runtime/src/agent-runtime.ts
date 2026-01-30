@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { MessageService } from "./message-service";
 import { ContextManager } from "./context-manager";
 import { LLMClient } from "./llm-client";
+import { ToolExecutor } from "./tool-executor";
 
 interface AgentRuntimeConfig {
   agentId: string;
@@ -25,6 +26,7 @@ export class AgentRuntime {
   private messageService: MessageService;
   private contextManager: ContextManager;
   private llmClient: LLMClient;
+  private toolExecutor: ToolExecutor;
 
   constructor(config: AgentRuntimeConfig) {
     this.agentId = config.agentId;
@@ -32,6 +34,15 @@ export class AgentRuntime {
     this.messageService = new MessageService();
     this.contextManager = new ContextManager(config.agentId);
     this.llmClient = new LLMClient(config.llmConfig);
+    this.toolExecutor = new ToolExecutor();
+
+    // 初始化工具
+    this.initializeTools(config.tools);
+  }
+
+  private initializeTools(toolIds: string[]): void {
+    // 根据 toolIds 注册工具
+    // 实际实现会从 MCP Registry 加载
   }
 
   /**
@@ -173,7 +184,42 @@ export class AgentRuntime {
    * 处理 LLM 响应
    */
   private async processResponse(response: any): Promise<void> {
-    // 实现见 Task 5
+    // 1. 如果有工具调用，执行工具
+    if (response.toolCalls && response.toolCalls.length > 0) {
+      for (const toolCall of response.toolCalls) {
+        const result = await this.toolExecutor.executeTool(
+          toolCall.function.name,
+          JSON.parse(toolCall.function.arguments)
+        );
+
+        // 将工具结果添加到上下文
+        this.contextManager.addMessage({
+          role: "tool",
+          content: JSON.stringify(result),
+          tool_call_id: toolCall.id,
+          name: toolCall.function.name,
+        });
+      }
+
+      // 工具执行后继续推理
+      const newContext = this.contextManager.getContext();
+      const followUpResponse = await this.runLLM(newContext);
+      await this.processResponse(followUpResponse);
+      return;
+    }
+
+    // 2. 发送回复到当前 Group
+    if (this.currentGroupId && response.content) {
+      await this.sendMessage(this.currentGroupId, response.content);
+    }
+  }
+
+  /**
+   * 发送消息到 Group
+   */
+  private async sendMessage(groupId: string, content: string): Promise<void> {
+    // 实现见 Task 6
+    console.log(`[Agent ${this.agentId}] Sending message to group ${groupId}: ${content}`);
   }
 
   /**
