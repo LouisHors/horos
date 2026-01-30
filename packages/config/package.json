@@ -1,0 +1,9 @@
+{
+  "name": "@ai-agent/config",
+  "version": "1.0.0",
+  "private": true,
+  "files": ["typescript", "eslint", "prettier"],
+  "scripts": {
+    "clean": "rm -rf node_modules"
+  }
+}
