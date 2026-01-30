@@ -3,6 +3,7 @@ import { agentInstances, messages } from "@ai-agent/core/src/db/schema";
 import { eq } from "drizzle-orm";
 import { MessageService } from "./message-service";
 import { ContextManager } from "./context-manager";
+import { LLMClient } from "./llm-client";
 
 interface AgentRuntimeConfig {
   agentId: string;
@@ -23,12 +24,14 @@ export class AgentRuntime {
   private currentGroupId?: string;
   private messageService: MessageService;
   private contextManager: ContextManager;
+  private llmClient: LLMClient;
 
   constructor(config: AgentRuntimeConfig) {
     this.agentId = config.agentId;
     this.config = config;
     this.messageService = new MessageService();
     this.contextManager = new ContextManager(config.agentId);
+    this.llmClient = new LLMClient(config.llmConfig);
   }
 
   /**
@@ -131,8 +134,39 @@ export class AgentRuntime {
    * 运行 LLM（流式输出）
    */
   private async runLLM(context: any[]): Promise<any> {
-    // 实现见 Task 4
-    return {};
+    let fullContent = "";
+    const toolCalls: any[] = [];
+
+    // 流式输出
+    for await (const chunk of this.llmClient.stream(context)) {
+      // 实时推送到 UI（通过 Redis）
+      await this.emitToUI({
+        type: "chunk",
+        agentId: this.agentId,
+        content: chunk.content,
+      });
+
+      if (chunk.content) {
+        fullContent += chunk.content;
+      }
+
+      if (chunk.tool_calls) {
+        toolCalls.push(...chunk.tool_calls);
+      }
+    }
+
+    return {
+      content: fullContent,
+      toolCalls,
+      finishReason: toolCalls.length > 0 ? "tool_calls" : "stop",
+    };
+  }
+
+  /**
+   * 实时推送到 UI
+   */
+  private async emitToUI(event: any): Promise<void> {
+    await redis.publish(`agent:ui:${this.agentId}`, JSON.stringify(event));
   }
 
   /**
