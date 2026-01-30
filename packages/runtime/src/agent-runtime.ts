@@ -218,8 +218,21 @@ export class AgentRuntime {
    * 发送消息到 Group
    */
   private async sendMessage(groupId: string, content: string): Promise<void> {
-    // 实现见 Task 6
-    console.log(`[Agent ${this.agentId}] Sending message to group ${groupId}: ${content}`);
+    const { GroupService } = await import("./group-service");
+    const groupService = new GroupService();
+    
+    await groupService.sendMessage({
+      groupId,
+      senderId: this.agentId,
+      content,
+      contentType: "text",
+    });
+
+    // 将自己的回复添加到上下文
+    this.contextManager.addMessage({
+      role: "assistant",
+      content,
+    });
   }
 
   /**

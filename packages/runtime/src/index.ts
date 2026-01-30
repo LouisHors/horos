@@ -6,3 +6,5 @@ export { ToolExecutor, type Tool } from "./tool-executor";
 export { AgentManager } from "./agent-manager";
 export { AgentFactory, type CreateAgentOptions } from "./agent-factory";
 export { AgentStateMachine, type AgentState } from "./agent-state-machine";
+export { AgentPool } from "./agent-pool";
+export { GroupService } from "./group-service";
