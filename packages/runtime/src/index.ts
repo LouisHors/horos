@@ -3,3 +3,6 @@ export { MessageService } from "./message-service";
 export { ContextManager } from "./context-manager";
 export { LLMClient } from "./llm-client";
 export { ToolExecutor, type Tool } from "./tool-executor";
+export { AgentManager } from "./agent-manager";
+export { AgentFactory, type CreateAgentOptions } from "./agent-factory";
+export { AgentStateMachine, type AgentState } from "./agent-state-machine";
