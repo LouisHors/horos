@@ -1,6 +1,7 @@
 import { db, redis } from "@ai-agent/core/src/db";
 import { agentInstances, messages } from "@ai-agent/core/src/db/schema";
 import { eq } from "drizzle-orm";
+import { MessageService } from "./message-service";
 
 interface AgentRuntimeConfig {
   agentId: string;
@@ -19,10 +20,12 @@ export class AgentRuntime {
   private config: AgentRuntimeConfig;
   private status: "idle" | "running" | "paused" | "terminated" = "idle";
   private currentGroupId?: string;
+  private messageService: MessageService;
 
   constructor(config: AgentRuntimeConfig) {
     this.agentId = config.agentId;
     this.config = config;
+    this.messageService = new MessageService();
   }
 
   /**
@@ -71,9 +74,19 @@ export class AgentRuntime {
    * 获取所有未读消息
    */
   private async getAllUnread(): Promise<any[]> {
-    // 从数据库获取未读消息
-    // 实现见 Task 2
-    return [];
+    const messages = await this.messageService.getUnreadMessages(this.agentId);
+
+    // 标记最后一条消息为已读
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      await this.messageService.markAsRead(
+        this.agentId,
+        lastMessage.groupId,
+        lastMessage.id
+      );
+    }
+
+    return messages;
   }
 
   /**
