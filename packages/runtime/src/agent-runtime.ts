@@ -2,6 +2,7 @@ import { db, redis } from "@ai-agent/core/src/db";
 import { agentInstances, messages } from "@ai-agent/core/src/db/schema";
 import { eq } from "drizzle-orm";
 import { MessageService } from "./message-service";
+import { ContextManager } from "./context-manager";
 
 interface AgentRuntimeConfig {
   agentId: string;
@@ -21,11 +22,13 @@ export class AgentRuntime {
   private status: "idle" | "running" | "paused" | "terminated" = "idle";
   private currentGroupId?: string;
   private messageService: MessageService;
+  private contextManager: ContextManager;
 
   constructor(config: AgentRuntimeConfig) {
     this.agentId = config.agentId;
     this.config = config;
     this.messageService = new MessageService();
+    this.contextManager = new ContextManager(config.agentId);
   }
 
   /**
@@ -110,8 +113,18 @@ export class AgentRuntime {
    * 构建 LLM 上下文
    */
   private async buildContext(newMessages: any[]): Promise<any[]> {
-    // 实现见 Task 3
-    return [];
+    // 将新消息转换为 LLM 消息格式
+    const newLLMMessages = newMessages.map((msg) => ({
+      role: msg.senderId === this.agentId ? "assistant" : "user",
+      content: msg.content,
+    }));
+
+    // 添加到上下文
+    for (const msg of newLLMMessages) {
+      this.contextManager.addMessage(msg);
+    }
+
+    return this.contextManager.getContext();
   }
 
   /**
@@ -133,6 +146,12 @@ export class AgentRuntime {
    * 加载上下文
    */
   private async loadContext(): Promise<void> {
+    await this.contextManager.load();
+
+    // 设置系统提示词
+    this.contextManager.setSystemPrompt(this.config.llmConfig.systemPrompt);
+
+    // 加载其他上下文信息
     const agent = await db.query.agentInstances.findFirst({
       where: eq(agentInstances.id, this.agentId),
     });
@@ -146,7 +165,7 @@ export class AgentRuntime {
    * 保存上下文
    */
   private async saveContext(): Promise<void> {
-    // 实现见 Task 3
+    await this.contextManager.save();
   }
 
   /**
