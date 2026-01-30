@@ -8,3 +8,5 @@ export { AgentFactory, type CreateAgentOptions } from "./agent-factory";
 export { AgentStateMachine, type AgentState } from "./agent-state-machine";
 export { AgentPool } from "./agent-pool";
 export { GroupService } from "./group-service";
+export { MCPClientManager } from "./mcp-client";
+export { ToolRegistry } from "./tool-registry";
