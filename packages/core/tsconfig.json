@@ -1,0 +1,10 @@
+{
+  "extends": "@ai-agent/config/typescript/base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "declaration": true,
+    "noEmit": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
