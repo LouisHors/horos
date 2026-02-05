@@ -1,6 +1,6 @@
 // 核心组件
 export { FlowCanvas } from './components/canvas';
-export { NodeLibrary, PropertyPanel, Toolbar } from './components/panels';
+export { NodeLibrary, PropertyPanel, Toolbar, ExecutionPanel } from './components/panels';
 export { 
   DynamicForm, 
   CodeEditor, 
@@ -17,6 +17,12 @@ export type {
   JsonEditorProps,
   ScriptEditorProps,
 } from './components';
+
+export type {
+  ExecutionPanelProps,
+  ExecutionLog,
+  NodeExecutionState,
+} from './components/panels';
 
 export {
   StartNode,
@@ -74,6 +80,45 @@ export type {
   SerializeOptions,
 } from './core';
 
+// Utils
+export {
+  cn,
+  nanoid,
+  getShortcutDisplay,
+  getMacShortcutDisplay,
+  getPlatformShortcutDisplay,
+  groupShortcutsByCategory,
+  isMac,
+  SHORTCUT_HELP_DATA,
+  CATEGORY_NAMES,
+  applyHierarchyLayout,
+  applyForceLayout,
+  autoLayout,
+  validateFlow,
+  detectCycles,
+  checkConnectivity,
+  exportToJSON,
+  exportToYAML,
+  importFromJSON,
+  importFromYAML,
+  importFlow,
+  downloadFile,
+  readFile,
+} from './utils';
+
+export type { 
+  ShortcutDefinition,
+  DagreLayoutOptions,
+  LayoutResult,
+  ValidationResult,
+  ValidationError,
+  ValidationWarning,
+  ValidationRule,
+  ExportFormat,
+  ExportOptions,
+  ImportOptions,
+} from './utils';
+
 // 类型
 export type {
   WorkflowNode,
@@ -90,22 +135,7 @@ export type {
   FlowDefinition,
   ExecutionStatus,
   NodeExecutionStatus,
-  HistoryEntry as FlowHistoryEntry,
-  ClipboardData as FlowClipboardData,
 } from './types';
 
 // 类型枚举
 export { NodeType } from './types';
-
-// 工具函数
-export { cn, nanoid } from './utils/cn';
-export { 
-  getShortcutDisplay,
-  getMacShortcutDisplay,
-  getPlatformShortcutDisplay,
-  groupShortcutsByCategory,
-  isMac,
-  SHORTCUT_HELP_DATA,
-  CATEGORY_NAMES,
-} from './utils/shortcuts';
-export type { ShortcutDefinition } from './utils/shortcuts';
