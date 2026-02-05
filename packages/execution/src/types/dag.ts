@@ -1,28 +1,45 @@
-import { WorkflowNode, WorkflowEdge } from '@horos/editor';
+/**
+ * DAG (有向无环图) 类型定义
+ */
 
-// DAG 节点
+/** DAG 节点 */
 export interface DAGNode {
   id: string;
-  node: WorkflowNode;
-  dependencies: string[];  // 依赖的节点ID
-  dependents: string[];    // 依赖此节点的节点ID
-  level: number;           // 拓扑层级
+  type: string;
+  data: Record<string, unknown>;
+  inputs: string[];
+  outputs: string[];
 }
 
-// DAG 边
+/** DAG 边 */
 export interface DAGEdge {
   id: string;
   source: string;
   target: string;
-  edge: WorkflowEdge;
+  sourceHandle?: string;
+  targetHandle?: string;
 }
 
-// 工作流 DAG
-export interface WorkflowDAG {
-  id: string;
-  nodes: Map<string, DAGNode>;
+/** DAG 结构 */
+export interface DAG {
+  nodes: DAGNode[];
   edges: DAGEdge[];
-  startNodes: string[];    // 没有依赖的节点
-  endNodes: string[];      // 没有依赖者的节点
-  levels: string[][];      // 按层级分组的节点ID
+  executionOrder: string[][];  // 分层执行顺序
+}
+
+/** 工作流节点 */
+export interface WorkflowNode {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+  position: { x: number; y: number };
+}
+
+/** 工作流边 */
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string;
+  targetHandle?: string;
 }

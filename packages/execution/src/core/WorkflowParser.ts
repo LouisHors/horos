@@ -1,104 +1,95 @@
-import { WorkflowNode, WorkflowEdge } from '@horos/editor';
-import { WorkflowDAG, DAGNode, DAGEdge } from '../types';
+import { WorkflowNode, WorkflowEdge, DAGNode, DAGEdge, DAG } from '../types';
 
+/**
+ * 将 ReactFlow 的 nodes/edges 转换为可执行的 DAG
+ */
 export class WorkflowParser {
   /**
-   * 将工作流解析为 DAG
+   * 解析工作流
    */
-  parse(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowDAG {
-    const dagNodes = new Map<string, DAGNode>();
-    const dagEdges: DAGEdge[] = [];
-    
-    // 初始化节点
-    nodes.forEach(node => {
-      dagNodes.set(node.id, {
-        id: node.id,
-        node,
-        dependencies: [],
-        dependents: [],
-        level: 0,
-      });
-    });
-    
-    // 构建依赖关系
-    edges.forEach(edge => {
-      const sourceNode = dagNodes.get(edge.source);
-      const targetNode = dagNodes.get(edge.target);
-      
-      if (sourceNode && targetNode) {
-        sourceNode.dependents.push(edge.target);
-        targetNode.dependencies.push(edge.source);
-        
-        dagEdges.push({
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          edge,
-        });
-      }
-    });
-    
-    // 计算层级
-    const levels = this.calculateLevels(dagNodes);
-    
-    // 找出开始和结束节点
-    const startNodes = nodes
-      .filter(n => dagNodes.get(n.id)!.dependencies.length === 0)
-      .map(n => n.id);
-      
-    const endNodes = nodes
-      .filter(n => dagNodes.get(n.id)!.dependents.length === 0)
-      .map(n => n.id);
-    
+  parseWorkflow(nodes: WorkflowNode[], edges: WorkflowEdge[]): DAG {
+    const dagNodes: DAGNode[] = nodes.map(node => ({
+      id: node.id,
+      type: node.type,
+      data: node.data,
+      inputs: this.getNodeInputs(node.id, edges),
+      outputs: this.getNodeOutputs(node.id, edges),
+    }));
+
+    const dagEdges: DAGEdge[] = edges.map(edge => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle,
+      targetHandle: edge.targetHandle,
+    }));
+
+    const executionOrder = this.topologicalSort(dagNodes, dagEdges);
+
     return {
-      id: `dag_${Date.now()}`,
       nodes: dagNodes,
       edges: dagEdges,
-      startNodes,
-      endNodes,
-      levels,
+      executionOrder,
     };
   }
-  
+
   /**
-   * 计算每个节点的层级
+   * 获取节点的输入边
    */
-  private calculateLevels(nodes: Map<string, DAGNode>): string[][] {
+  private getNodeInputs(nodeId: string, edges: WorkflowEdge[]): string[] {
+    return edges
+      .filter(edge => edge.target === nodeId)
+      .map(edge => edge.source);
+  }
+
+  /**
+   * 获取节点的输出边
+   */
+  private getNodeOutputs(nodeId: string, edges: WorkflowEdge[]): string[] {
+    return edges
+      .filter(edge => edge.source === nodeId)
+      .map(edge => edge.target);
+  }
+
+  /**
+   * 拓扑排序 - 使用 Kahn 算法
+   */
+  private topologicalSort(nodes: DAGNode[], edges: DAGEdge[]): string[][] {
+    const inDegree = new Map<string, number>();
     const levels: string[][] = [];
-    const visited = new Set<string>();
     
-    // 找到入度为0的节点
-    let currentLevel = Array.from(nodes.values())
-      .filter(n => n.dependencies.length === 0)
-      .map(n => n.id);
-    
+    // 初始化入度
+    nodes.forEach(node => inDegree.set(node.id, 0));
+    edges.forEach(edge => {
+      inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
+    });
+
+    // 找到所有入度为 0 的节点作为起始节点
+    let currentLevel = nodes
+      .filter(node => inDegree.get(node.id) === 0)
+      .map(node => node.id);
+
     while (currentLevel.length > 0) {
       levels.push([...currentLevel]);
-      currentLevel.forEach(id => visited.add(id));
-      
-      // 找到下一层
-      const nextLevel = new Set<string>();
-      currentLevel.forEach(id => {
-        const node = nodes.get(id)!;
-        node.dependents.forEach(depId => {
-          const depNode = nodes.get(depId)!;
-          // 检查所有依赖是否都已访问
-          if (depNode.dependencies.every(d => visited.has(d))) {
-            nextLevel.add(depId);
+      const nextLevel: string[] = [];
+
+      for (const nodeId of currentLevel) {
+        // 找到所有从当前节点出发的边
+        const outgoingEdges = edges.filter(edge => edge.source === nodeId);
+        
+        for (const edge of outgoingEdges) {
+          const newDegree = (inDegree.get(edge.target) || 0) - 1;
+          inDegree.set(edge.target, newDegree);
+          
+          if (newDegree === 0) {
+            nextLevel.push(edge.target);
           }
-        });
-      });
-      
-      currentLevel = Array.from(nextLevel);
+        }
+      }
+
+      currentLevel = nextLevel;
     }
-    
-    // 更新节点层级
-    levels.forEach((level, index) => {
-      level.forEach(id => {
-        nodes.get(id)!.level = index;
-      });
-    });
-    
+
     return levels;
   }
 }

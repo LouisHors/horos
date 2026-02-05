@@ -1,50 +1,104 @@
-import { WorkflowDAG } from '../types';
+import { DAG, ExecutionContext, DAGNode } from '../types';
+import { ExecutionEngine } from './ExecutionEngine';
 
-export interface ScheduleOptions {
-  parallel?: boolean;
-  maxConcurrency?: number;
+export interface SchedulerConfig {
+  maxParallelism: number;
+  enableParallel?: boolean;
 }
 
+/**
+ * 执行调度器
+ */
 export class ExecutionScheduler {
+  private config: SchedulerConfig;
+  private executionSlots: Map<string, boolean> = new Map();
+  private completedNodes: Set<string> = new Set();
+  private dag?: DAG;
+
+  constructor(config: SchedulerConfig) {
+    this.config = {
+      enableParallel: true,
+      ...config,
+    };
+  }
+
   /**
-   * 获取准备执行的节点
+   * 初始化调度器
    */
-  getReadyNodes(dag: WorkflowDAG, completedNodes: Set<string>): string[] {
-    const ready: string[] = [];
+  initialize(dag: DAG): void {
+    this.dag = dag;
+    this.completedNodes.clear();
+  }
+
+  /**
+   * 获取就绪节点
+   */
+  getReadyNodes(): string[] {
+    if (!this.dag) return [];
     
-    dag.nodes.forEach((node, id) => {
-      if (completedNodes.has(id)) return;
-      
-      // 检查所有依赖是否已完成
-      const allDependenciesMet = node.dependencies.every(depId => 
-        completedNodes.has(depId)
-      );
-      
-      if (allDependenciesMet) {
-        ready.push(id);
+    return this.dag.nodes
+      .filter(node => {
+        // 节点未执行
+        if (this.completedNodes.has(node.id)) return false;
+        // 所有依赖已完成
+        return node.inputs.every(input => this.completedNodes.has(input));
+      })
+      .map(node => node.id);
+  }
+
+  /**
+   * 标记节点完成
+   */
+  completeNode(nodeId: string): void {
+    this.completedNodes.add(nodeId);
+  }
+
+  /**
+   * 调度执行
+   */
+  async scheduleExecution(
+    dag: DAG,
+    engine: ExecutionEngine,
+    context: ExecutionContext
+  ): Promise<void> {
+    this.initialize(dag);
+    
+    for (const level of dag.executionOrder) {
+      if (this.config.enableParallel && level.length > 1) {
+        await this.executeParallel(level, dag, engine, context);
+      } else {
+        await this.executeSequential(level, dag, engine, context);
       }
-    });
-    
-    return ready;
+      
+      // 更新已完成节点
+      level.forEach(id => this.completeNode(id));
+    }
   }
-  
+
   /**
-   * 获取执行顺序（拓扑排序）
+   * 并行执行节点
    */
-  getExecutionOrder(dag: WorkflowDAG): string[][] {
-    return dag.levels;
+  private async executeParallel(
+    nodeIds: string[],
+    dag: DAG,
+    engine: ExecutionEngine,
+    context: ExecutionContext
+  ): Promise<void> {
+    const executing = nodeIds.map(id => engine.executeNode(id, dag, context));
+    await Promise.all(executing);
   }
-  
+
   /**
-   * 检查是否可以并行执行
+   * 串行执行节点
    */
-  canExecuteInParallel(nodeId1: string, nodeId2: string, dag: WorkflowDAG): boolean {
-    const node1 = dag.nodes.get(nodeId1)!;
-    const node2 = dag.nodes.get(nodeId2)!;
-    
-    // 同一层级且没有依赖关系的节点可以并行
-    return node1.level === node2.level && 
-           !node1.dependencies.includes(nodeId2) &&
-           !node2.dependencies.includes(nodeId1);
+  private async executeSequential(
+    nodeIds: string[],
+    dag: DAG,
+    engine: ExecutionEngine,
+    context: ExecutionContext
+  ): Promise<void> {
+    for (const nodeId of nodeIds) {
+      await engine.executeNode(nodeId, dag, context);
+    }
   }
 }

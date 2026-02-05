@@ -1,35 +1,50 @@
 import { describe, it, expect } from 'vitest';
 import { NodeExecutor } from './NodeExecutor';
-import { WorkflowNode, NodeType } from '@horos/editor';
+import { DAGNode, ExecutionContext } from '../types';
+
+class TestExecutor extends NodeExecutor {
+  async execute(node: DAGNode, context: ExecutionContext) {
+    return { test: true };
+  }
+}
 
 describe('NodeExecutor', () => {
-  const executor = new NodeExecutor();
-  
-  it('should execute start node', async () => {
-    const node: WorkflowNode = {
-      id: 'start',
-      type: NodeType.START,
-      position: { x: 0, y: 0 },
-      data: { initialContext: { user: 'test' } },
-    };
-    
-    const result = await executor.execute(node, {});
-    
-    expect(result.status).toBe('success');
-    expect(result.output).toEqual({ user: 'test' });
-  });
-  
-  it('should execute end node', async () => {
-    const node: WorkflowNode = {
-      id: 'end',
-      type: NodeType.END,
-      position: { x: 0, y: 0 },
+  it('should execute node', async () => {
+    const executor = new TestExecutor();
+    const node: DAGNode = {
+      id: 'test',
+      type: 'test',
       data: {},
+      inputs: [],
+      outputs: [],
     };
-    
-    const result = await executor.execute(node, {});
-    
-    expect(result.status).toBe('success');
-    expect(result.output).toEqual({ completed: true });
+    const context: ExecutionContext = {
+      executionId: 'exec-1',
+      workflowId: 'wf-1',
+      variables: new Map(),
+      nodeOutputs: new Map(),
+      startTime: new Date(),
+    };
+
+    const result = await executor.execute(node, context, null);
+
+    expect(result).toEqual({ test: true });
+  });
+
+  it('should get and set output data', async () => {
+    const executor = new TestExecutor();
+    const context: ExecutionContext = {
+      executionId: 'exec-1',
+      workflowId: 'wf-1',
+      variables: new Map(),
+      nodeOutputs: new Map([['prev', { value: 42 }]]),
+      startTime: new Date(),
+    };
+
+    const input = executor['getInputData']('prev', context);
+    expect(input).toEqual({ value: 42 });
+
+    executor['setOutputData']('current', { result: 'ok' }, context);
+    expect(context.nodeOutputs.get('current')).toEqual({ result: 'ok' });
   });
 });

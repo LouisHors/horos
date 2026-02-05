@@ -1,159 +1,176 @@
-import { WorkflowNode, WorkflowEdge, ExecutionStatus } from '@horos/editor';
+import { 
+  WorkflowNode, WorkflowEdge, DAG, NodeType, 
+  ExecutionContext, ExecutionResult, ExecutionStatus,
+  ExecutionState, NodeExecutionResult, ExecutionError
+} from '../types';
 import { WorkflowParser } from './WorkflowParser';
 import { ExecutionScheduler } from './ExecutionScheduler';
 import { NodeExecutor } from '../executors/NodeExecutor';
-import { ExecutionState, ExecutionContext, WorkflowDAG } from '../types';
 
-export interface ExecutionEngineConfig {
-  enableCheckpoint?: boolean;
-  checkpointInterval?: number;
-  parallel?: boolean;
-  maxConcurrency?: number;
-}
+type EventHandler = (data: unknown) => void;
 
+/**
+ * 工作流执行引擎
+ */
 export class ExecutionEngine {
   private parser: WorkflowParser;
   private scheduler: ExecutionScheduler;
-  private executor: NodeExecutor;
-  private config: ExecutionEngineConfig;
-  private executions = new Map<string, ExecutionState>();
-  
-  constructor(config: ExecutionEngineConfig = {}) {
+  private executors: Map<string, NodeExecutor> = new Map();
+  private state: ExecutionState | null = null;
+  private eventHandlers: Map<string, EventHandler[]> = new Map();
+
+  constructor() {
     this.parser = new WorkflowParser();
-    this.scheduler = new ExecutionScheduler();
-    this.executor = new NodeExecutor();
-    this.config = {
-      enableCheckpoint: true,
-      checkpointInterval: 5000,
-      parallel: false,
-      maxConcurrency: 5,
-      ...config,
-    };
+    this.scheduler = new ExecutionScheduler({ maxParallelism: 5 });
   }
-  
+
   /**
-   * 启动执行
+   * 注册节点执行器
    */
-  async start(
-    nodes: WorkflowNode[],
-    edges: WorkflowEdge[],
-    initialContext: Record<string, unknown> = {}
-  ): Promise<ExecutionState> {
-    const executionId = `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // 解析 DAG
-    const dag = this.parser.parse(nodes, edges);
-    
-    // 创建执行状态
-    const state: ExecutionState = {
-      executionId,
-      status: ExecutionStatus.RUNNING,
-      currentNodes: dag.startNodes,
-      completedNodes: [],
-      failedNodes: [],
-      pendingNodes: Array.from(dag.nodes.keys()).filter(
-        id => !dag.startNodes.includes(id)
-      ),
-      context: {
-        executionId,
-        workflowId: dag.id,
-        variables: new Map(Object.entries(initialContext)),
-        nodeOutputs: new Map(),
-        startTime: new Date(),
-      },
-    };
-    
-    this.executions.set(executionId, state);
-    
-    // 开始执行
-    this.runExecution(executionId, dag);
-    
-    return state;
+  registerExecutor(nodeType: string, executor: NodeExecutor): void {
+    this.executors.set(nodeType, executor);
   }
-  
+
   /**
    * 执行工作流
    */
-  private async runExecution(executionId: string, dag: WorkflowDAG): Promise<void> {
-    const state = this.executions.get(executionId)!;
-    const completed = new Set<string>();
-    
-    while (completed.size < dag.nodes.size) {
-      // 获取准备执行的节点
-      const ready = this.scheduler.getReadyNodes(dag, completed);
-      
-      if (ready.length === 0) {
-        // 检查是否有失败的节点
-        if (state.failedNodes.length > 0) {
-          state.status = ExecutionStatus.FAILED;
-          break;
-        }
-        break;
-      }
-      
-      // 执行准备就绪的节点
-      if (this.config.parallel) {
-        // 并行执行
-        const batch = ready.slice(0, this.config.maxConcurrency);
-        await Promise.all(
-          batch.map(id => this.executeNode(id, dag, state, completed))
-        );
-      } else {
-        // 串行执行
-        for (const nodeId of ready) {
-          await this.executeNode(nodeId, dag, state, completed);
-        }
-      }
-      
-      // 更新当前节点
-      state.currentNodes = this.scheduler.getReadyNodes(dag, completed);
-    }
-    
-    // 更新最终状态
-    if (state.failedNodes.length > 0) {
-      state.status = ExecutionStatus.FAILED;
-    } else if (completed.size === dag.nodes.size) {
-      state.status = ExecutionStatus.COMPLETED;
+  async execute(nodes: WorkflowNode[], edges: WorkflowEdge[]): Promise<ExecutionResult> {
+    const executionId = `exec_${Date.now()}`;
+    const startTime = Date.now();
+
+    try {
+      // 解析 DAG
+      const dag = this.parser.parseWorkflow(nodes, edges);
+
+      // 初始化执行上下文
+      const context: ExecutionContext = {
+        executionId,
+        workflowId: 'workflow_1',
+        variables: new Map(),
+        nodeOutputs: new Map(),
+        startTime: new Date(),
+      };
+
+      // 初始化状态
+      this.state = {
+        executionId,
+        status: 'running',
+        currentNodes: dag.executionOrder[0] || [],
+        completedNodes: [],
+        failedNodes: [],
+        pendingNodes: dag.nodes.map(n => n.id),
+        context,
+      };
+
+      this.emit('start', { executionId });
+
+      // 调度执行
+      await this.scheduler.scheduleExecution(dag, this, context);
+
+      // 构建结果
+      return {
+        success: true,
+        executionId,
+        status: 'completed',
+        outputs: context.nodeOutputs,
+        errors: [],
+        duration: Date.now() - startTime,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        executionId,
+        status: 'failed',
+        outputs: new Map(),
+        errors: [{
+          nodeId: '',
+          error: error as Error,
+          recoverable: false,
+        }],
+        duration: Date.now() - startTime,
+      };
     }
   }
-  
+
   /**
    * 执行单个节点
    */
-  private async executeNode(
-    nodeId: string,
-    dag: WorkflowDAG,
-    state: ExecutionState,
-    completed: Set<string>
-  ): Promise<void> {
-    const dagNode = dag.nodes.get(nodeId)!;
-    const result = await this.executor.execute(dagNode.node, state.context);
-    
-    if (result.status === 'success') {
-      completed.add(nodeId);
-      state.completedNodes.push(nodeId);
-      state.context.nodeOutputs.set(nodeId, result.output);
-    } else {
-      state.failedNodes.push(nodeId);
+  async executeNode(nodeId: string, dag: DAG, context: ExecutionContext): Promise<unknown> {
+    const node = dag.nodes.find(n => n.id === nodeId);
+    if (!node) throw new Error(`Node not found: ${nodeId}`);
+
+    this.emit('progress', { nodeId, status: 'running' });
+
+    const executor = this.executors.get(node.type);
+    if (!executor) {
+      throw new Error(`No executor for node type: ${node.type}`);
+    }
+
+    const result = await executor.execute(node, context, this);
+    context.nodeOutputs.set(nodeId, result);
+
+    // 更新状态
+    if (this.state) {
+      this.state.completedNodes.push(nodeId);
+      this.state.currentNodes = this.state.currentNodes.filter(id => id !== nodeId);
+    }
+
+    this.emit('progress', { nodeId, status: 'completed', result });
+
+    return result;
+  }
+
+  /**
+   * 获取当前状态
+   */
+  getState(): ExecutionState | null {
+    return this.state;
+  }
+
+  /**
+   * 暂停执行
+   */
+  pause(): void {
+    if (this.state) {
+      this.state.status = 'paused';
+      this.emit('pause', { executionId: this.state.executionId });
     }
   }
-  
+
   /**
-   * 获取执行状态
+   * 恢复执行
    */
-  getState(executionId: string): ExecutionState | undefined {
-    return this.executions.get(executionId);
-  }
-  
-  /**
-   * 停止执行
-   */
-  stop(executionId: string): boolean {
-    const state = this.executions.get(executionId);
-    if (state) {
-      state.status = ExecutionStatus.CANCELLED;
-      return true;
+  resume(): void {
+    if (this.state) {
+      this.state.status = 'running';
+      this.emit('resume', { executionId: this.state.executionId });
     }
-    return false;
+  }
+
+  /**
+   * 取消执行
+   */
+  cancel(): void {
+    if (this.state) {
+      this.state.status = 'cancelled';
+      this.emit('cancel', { executionId: this.state.executionId });
+    }
+  }
+
+  /**
+   * 事件监听
+   */
+  on(event: string, handler: EventHandler): void {
+    const handlers = this.eventHandlers.get(event) || [];
+    handlers.push(handler);
+    this.eventHandlers.set(event, handlers);
+  }
+
+  /**
+   * 触发事件
+   */
+  private emit(event: string, data: unknown): void {
+    const handlers = this.eventHandlers.get(event) || [];
+    handlers.forEach(handler => handler(data));
   }
 }
