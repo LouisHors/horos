@@ -60,3 +60,4 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agent_platform_test
           REDIS_URL: redis://localhost:6379
+          OPENAI_API_KEY: sk-test-key-for-ci
