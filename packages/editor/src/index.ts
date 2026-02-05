@@ -30,20 +30,49 @@ export {
 // Store
 export { useFlowStore, useUIStore, PanelType } from './stores';
 export type { FlowState } from './stores/flowStore';
-export type { UIState } from './stores/uiStore';
+export type { UIState, DragState } from './stores';
 
 // Hooks
-export { useNodeRegistry, useFlowState } from './hooks';
+export { 
+  useNodeRegistry, 
+  useFlowState, 
+  useHistory, 
+  useClipboard, 
+  useKeyboard,
+  createShortcuts,
+  DEFAULT_SHORTCUTS,
+} from './hooks';
 export type { 
   UseNodeRegistryOptions, 
   UseFlowStateReturn,
   CreateNodeConfig,
   UpdateNodeConfig,
   CreateEdgeConfig,
+  UseHistoryOptions,
+  UseHistoryReturn,
+  UseClipboardOptions,
+  UseClipboardReturn,
+  KeyboardShortcut,
+  KeyboardShortcutsConfig,
+  UseKeyboardOptions,
+  UseKeyboardReturn,
 } from './hooks';
 
 // Core
-export { NodeRegistry, nodeRegistry } from './core/NodeRegistry';
+export { 
+  NodeRegistry, 
+  nodeRegistry,
+  HistoryManager,
+  ClipboardManager,
+} from './core';
+export type {
+  HistoryEntry,
+  HistoryActionType,
+  HistoryManagerConfig,
+  ClipboardData,
+  PasteOffset,
+  SerializeOptions,
+} from './core';
 
 // 类型
 export type {
@@ -61,8 +90,8 @@ export type {
   FlowDefinition,
   ExecutionStatus,
   NodeExecutionStatus,
-  HistoryEntry,
-  ClipboardData,
+  HistoryEntry as FlowHistoryEntry,
+  ClipboardData as FlowClipboardData,
 } from './types';
 
 // 类型枚举
@@ -70,3 +99,13 @@ export { NodeType } from './types';
 
 // 工具函数
 export { cn, nanoid } from './utils/cn';
+export { 
+  getShortcutDisplay,
+  getMacShortcutDisplay,
+  getPlatformShortcutDisplay,
+  groupShortcutsByCategory,
+  isMac,
+  SHORTCUT_HELP_DATA,
+  CATEGORY_NAMES,
+} from './utils/shortcuts';
+export type { ShortcutDefinition } from './utils/shortcuts';

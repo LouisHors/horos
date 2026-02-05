@@ -1,2 +1,3 @@
 export { useFlowStore, type FlowState } from './flowStore';
-export { useUIStore, type UIState, PanelType } from './uiStore';
+export { useUIStore, PanelType } from './uiStore';
+export type { UIState, DragState } from './uiStore';

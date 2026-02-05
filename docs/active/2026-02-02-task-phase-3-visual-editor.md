@@ -174,21 +174,21 @@ packages/
   - 节点/边状态管理
   - 选中状态同步
 
-- [ ] **Task 13**: 撤销重做功能
+- [x] **Task 13**: 撤销重做功能
   - 文件: `packages/editor/src/core/HistoryManager.ts`
   - 文件: `packages/editor/src/hooks/useHistory.ts`
   - 历史记录管理
   - 撤销/重做操作
   - 历史限制
 
-- [ ] **Task 14**: 复制粘贴功能
+- [x] **Task 14**: 复制粘贴功能
   - 文件: `packages/editor/src/core/ClipboardManager.ts`
   - 文件: `packages/editor/src/hooks/useClipboard.ts`
   - 节点复制
   - 跨画布粘贴
   - 剪贴板序列化
 
-- [ ] **Task 15**: 快捷键支持
+- [x] **Task 15**: 快捷键支持
   - 文件: `packages/editor/src/hooks/useKeyboard.ts`
   - 文件: `packages/editor/src/utils/shortcuts.ts`
   - 键盘事件监听
@@ -197,7 +197,7 @@ packages/
 
 ### Week 6 - Day 4-5: 状态管理与集成 (Tasks 16-19) 🟡
 
-- [ ] **Task 16**: UI 状态管理
+- [x] **Task 16**: UI 状态管理
   - 文件: `packages/editor/src/stores/uiStore.ts`
   - 面板显隐状态
   - 主题切换
@@ -420,6 +420,46 @@ Phase 3 完成时，系统应该能够：
 - **备注**: 
   - Task 8, 10, 12 已完成
   - 可开始 Task 13-16 (撤销重做、复制粘贴、快捷键、UI状态)
+
+---
+
+### 2026-02-05 - Day 25-26
+
+- **状态**: ✅ Day 25-26 完成
+- **完成任务**:
+  - ✅ Task 13: 实现 HistoryManager + useHistory Hook
+    - 撤销/重做核心逻辑
+    - 历史记录管理（最大限制）
+    - 便捷方法（记录节点增删改）
+  - ✅ Task 14: 实现 ClipboardManager + useClipboard Hook
+    - 复制/粘贴功能
+    - 支持系统剪贴板
+    - 导入/导出文件
+  - ✅ Task 15: 实现 useKeyboard Hook + shortcuts 工具
+    - 键盘事件监听
+    - 快捷键注册/注销
+    - 平台适配（Mac/Windows）
+  - ✅ Task 16: 完善 uiStore
+    - 拖拽状态管理
+    - 右键菜单状态
+    - Toast 通知系统
+    - 加载状态
+  - ✅ 添加测试 (30 个新测试)
+  - ✅ 更新导出和类型定义
+- **Git 提交**:
+  - feat: add HistoryManager and useHistory hook
+  - feat: add ClipboardManager and useClipboard hook
+  - feat: add useKeyboard hook and shortcuts utilities
+  - feat: enhance uiStore with drag, context menu, toast, loading states
+  - test: add tests for HistoryManager and ClipboardManager
+- **构建状态**:
+  - ESM: 95.06 KB
+  - DTS: 27.30 KB
+  - Tests: 102 passed
+- **备注**: 
+  - Task 13-16 已完成
+  - Phase 3 核心功能基本完成
+  - 剩余 Task 17-19 (执行面板、辅助功能、示例文档)
 
 ---
 
