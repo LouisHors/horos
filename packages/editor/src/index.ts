@@ -21,8 +21,19 @@ export type {
 export type {
   ExecutionPanelProps,
   ExecutionLog,
-  NodeExecutionState,
+  NodeExecutionState as ExecutionLogNodeState,
 } from './components/panels';
+
+// Execution Components
+export { ExecutionToolbar } from './components/ExecutionToolbar';
+export { NodeStatusBadge } from './components/NodeStatusBadge';
+export { NodeWrapper } from './components/nodes/NodeWrapper';
+export type { 
+  ExecutionToolbarProps,
+  NodeStatus,
+  NodeStatusBadgeProps,
+  NodeWrapperProps,
+} from './components';
 
 export {
   StartNode,
@@ -45,6 +56,7 @@ export {
   useHistory, 
   useClipboard, 
   useKeyboard,
+  useExecution,
   createShortcuts,
   DEFAULT_SHORTCUTS,
 } from './hooks';
@@ -62,6 +74,7 @@ export type {
   KeyboardShortcutsConfig,
   UseKeyboardOptions,
   UseKeyboardReturn,
+  UseExecutionReturn,
 } from './hooks';
 
 // Core
@@ -119,6 +132,14 @@ export type {
   ImportOptions,
 } from './utils';
 
+// Integrations
+export { ExecutionBridge } from './integrations/ExecutionBridge';
+export type { 
+  ExecutionBridgeCallbacks,
+  ExecutionStatus,
+  NodeExecutionState,
+} from './integrations/ExecutionBridge';
+
 // 类型
 export type {
   WorkflowNode,
@@ -133,7 +154,7 @@ export type {
   NodeHandle,
   CanvasState,
   FlowDefinition,
-  ExecutionStatus,
+  ExecutionStatus as EditorExecutionStatus,
   NodeExecutionStatus,
 } from './types';
 

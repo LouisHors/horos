@@ -59,6 +59,9 @@ export type WorkflowNodeData =
   | StartNodeData
   | EndNodeData;
 
+// 简化的节点数据类型（供组件使用）
+export type NodeData = BaseNodeData;
+
 // 工作流节点
 export type WorkflowNode = Node<WorkflowNodeData>;
 

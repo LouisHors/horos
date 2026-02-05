@@ -13,8 +13,8 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean",
-    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "build": "tsup src/index.ts --format esm --dts --clean --external @horos/execution",
+    "dev": "tsup src/index.ts --format esm --dts --watch --external @horos/execution",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "vitest run"
   },

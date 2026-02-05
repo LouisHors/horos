@@ -3,6 +3,7 @@ export { useFlowState } from './useFlowState';
 export { useHistory } from './useHistory';
 export { useClipboard } from './useClipboard';
 export { useKeyboard, createShortcuts, DEFAULT_SHORTCUTS } from './useKeyboard';
+export { useExecution } from './useExecution';
 
 export type { 
   UseNodeRegistryOptions, 
@@ -31,3 +32,7 @@ export type {
   UseKeyboardOptions,
   UseKeyboardReturn,
 } from './useKeyboard';
+
+export type {
+  UseExecutionReturn,
+} from './useExecution';

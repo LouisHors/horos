@@ -2,6 +2,7 @@
 export { NodeLibrary } from './panels/NodeLibrary';
 export { PropertyPanel } from './panels/PropertyPanel';
 export { Toolbar } from './panels/Toolbar';
+export { ExecutionPanel } from './panels/ExecutionPanel';
 
 // Forms
 export { DynamicForm } from './forms/DynamicForm';
@@ -36,3 +37,13 @@ export {
   ConditionNode,
   nodeTypes,
 } from './nodes';
+
+// Execution Components
+export { ExecutionToolbar } from './ExecutionToolbar';
+export { NodeStatusBadge } from './NodeStatusBadge';
+export { NodeWrapper } from './nodes/NodeWrapper';
+
+// Types
+export type { ExecutionToolbarProps } from './ExecutionToolbar';
+export type { NodeStatus, NodeStatusBadgeProps } from './NodeStatusBadge';
+export type { NodeWrapperProps } from './nodes/NodeWrapper';
