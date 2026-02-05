@@ -461,6 +461,13 @@ kubectl run debug --rm -it --image=curlimages/curl --restart=Never -- curl http:
 
 ---
 
+## Claude Code Skill 兼容
+
+### horspowers
+在 /Users/zego/Zego/horspowers 目录下，是一个完整的，claude code skills 项目，skills/ 子目录包含了所有技能
+
+
+
 ## 参考文档
 
 - [架构设计文档](./architecture_design.md) - 完整的系统架构设计
