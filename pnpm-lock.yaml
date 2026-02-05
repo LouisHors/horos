@@ -161,6 +161,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^0.5.0
         version: 0.5.0
+      drizzle-orm:
+        specifier: ^0.45.1
+        version: 0.45.1(gel@2.2.0)(postgres@3.4.8)
       ioredis:
         specifier: ^5.3.0
         version: 5.9.2
