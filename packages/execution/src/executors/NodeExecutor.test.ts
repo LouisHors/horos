@@ -3,7 +3,7 @@ import { NodeExecutor } from './NodeExecutor';
 import { DAGNode, ExecutionContext } from '../types';
 
 class TestExecutor extends NodeExecutor {
-  async execute(node: DAGNode, context: ExecutionContext) {
+  async execute(node: DAGNode, context: ExecutionContext, _engine: unknown) {
     return { test: true };
   }
 }
