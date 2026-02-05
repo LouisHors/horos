@@ -1,31 +1,52 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ExecutionEngine } from './ExecutionEngine';
-import { WorkflowNode, WorkflowEdge, NodeType } from '@horos/editor';
+import { NodeType } from '../types';
+import type { WorkflowNode, WorkflowEdge, NodeExecutor, ExecutionContext } from '../types';
+
+class MockExecutor implements NodeExecutor {
+  async execute() {
+    return { result: 'mock' };
+  }
+}
 
 describe('ExecutionEngine', () => {
-  const engine = new ExecutionEngine();
+  const createEngine = () => {
+    const engine = new ExecutionEngine();
+    engine.registerExecutor(NodeType.AGENT, new MockExecutor());
+    engine.registerExecutor(NodeType.TOOL, new MockExecutor());
+    engine.registerExecutor(NodeType.START, new MockExecutor());
+    return engine;
+  };
   
-  const mockNodes: WorkflowNode[] = [
-    { id: 'start', type: NodeType.START, position: { x: 0, y: 0 }, data: {} },
-    { id: 'end', type: NodeType.END, position: { x: 100, y: 0 }, data: {} },
-  ];
-  
-  const mockEdges: WorkflowEdge[] = [
-    { id: 'e1', source: 'start', target: 'end', type: 'custom' },
-  ];
-  
-  it('should start execution', async () => {
-    const execution = await engine.start(mockNodes, mockEdges);
+  it('should execute workflow', async () => {
+    const engine = createEngine();
     
-    expect(execution.executionId).toBeDefined();
-    expect(execution.status).toBe('running');
+    const nodes: WorkflowNode[] = [
+      { id: 'start', type: NodeType.START, data: {}, position: { x: 0, y: 0 } },
+      { id: 'agent', type: NodeType.AGENT, data: {}, position: { x: 100, y: 0 } },
+    ];
+    const edges: WorkflowEdge[] = [
+      { id: 'e1', source: 'start', target: 'agent' },
+    ];
+    
+    const result = await engine.execute(nodes, edges);
+    
+    expect(result.success).toBe(true);
+    expect(result.status).toBe('completed');
   });
   
-  it('should get execution state', async () => {
-    const execution = await engine.start(mockNodes, mockEdges);
-    const state = engine.getState(execution.executionId);
+  it('should report progress', async () => {
+    const engine = createEngine();
+    const progressFn = vi.fn();
     
-    expect(state).toBeDefined();
-    expect(state?.executionId).toBe(execution.executionId);
+    engine.on('progress', progressFn);
+    
+    const nodes: WorkflowNode[] = [
+      { id: 'start', type: NodeType.START, data: {}, position: { x: 0, y: 0 } },
+    ];
+    
+    await engine.execute(nodes, []);
+    
+    expect(progressFn).toHaveBeenCalled();
   });
 });
