@@ -1,4 +1,4 @@
-import { WorkflowNode } from '@horos/editor';
+import { WorkflowNode } from '../types';
 import { ExecutionContext } from '../types';
 
 export interface ConditionBranch {
