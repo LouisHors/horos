@@ -47,3 +47,4 @@ export { NodeWrapper } from './nodes/NodeWrapper';
 export type { ExecutionToolbarProps } from './ExecutionToolbar';
 export type { NodeStatus, NodeStatusBadgeProps } from './NodeStatusBadge';
 export type { NodeWrapperProps } from './nodes/NodeWrapper';
+export type { ExecutionHistoryPanelProps } from './panels/ExecutionHistoryPanel';

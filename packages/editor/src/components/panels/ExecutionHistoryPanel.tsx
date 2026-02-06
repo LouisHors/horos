@@ -34,19 +34,6 @@ export const ExecutionHistoryPanel: React.FC<ExecutionHistoryPanelProps> = ({
     }
   };
 
-  const getStatusClass = (status: ExecutionRecord['status']) => {
-    switch (status) {
-      case 'running':
-        return 'bg-blue-50 border-blue-200';
-      case 'completed':
-        return 'bg-green-50 border-green-200';
-      case 'failed':
-        return 'bg-red-50 border-red-200';
-      case 'cancelled':
-        return 'bg-gray-50 border-gray-200';
-    }
-  };
-
   const formatDuration = (ms?: number) => {
     if (!ms) return '-';
     if (ms < 1000) return `${ms}ms`;
