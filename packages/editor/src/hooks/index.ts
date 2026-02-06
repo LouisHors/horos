@@ -4,6 +4,7 @@ export { useHistory } from './useHistory';
 export { useClipboard } from './useClipboard';
 export { useKeyboard, createShortcuts, DEFAULT_SHORTCUTS } from './useKeyboard';
 export { useExecution } from './useExecution';
+export { useExecutionHistory } from './useExecutionHistory';
 
 export type { 
   UseNodeRegistryOptions, 
@@ -36,3 +37,8 @@ export type {
 export type {
   UseExecutionReturn,
 } from './useExecution';
+
+export type {
+  ExecutionRecord,
+  UseExecutionHistoryReturn,
+} from './useExecutionHistory';

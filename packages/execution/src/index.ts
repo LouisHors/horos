@@ -11,6 +11,8 @@ export { NodeExecutor } from './executors/NodeExecutor';
 export { AgentNodeExecutor } from './executors/AgentNodeExecutor';
 export { ToolNodeExecutor } from './executors/ToolNodeExecutor';
 export { ConditionExecutor } from './executors/ConditionExecutor';
+export { LoopNodeExecutor } from './executors/LoopNodeExecutor';
+export { CodeNodeExecutor } from './executors/CodeNodeExecutor';
 
 // Services
 export { LLMService, llmService } from './services/LLMService';

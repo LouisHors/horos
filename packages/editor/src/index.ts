@@ -28,11 +28,13 @@ export type {
 export { ExecutionToolbar } from './components/ExecutionToolbar';
 export { NodeStatusBadge } from './components/NodeStatusBadge';
 export { NodeWrapper } from './components/nodes/NodeWrapper';
+export { ExecutionHistoryPanel } from './components/panels/ExecutionHistoryPanel';
 export type { 
   ExecutionToolbarProps,
   NodeStatus,
   NodeStatusBadgeProps,
   NodeWrapperProps,
+  ExecutionHistoryPanelProps,
 } from './components';
 
 export {
