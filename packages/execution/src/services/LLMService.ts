@@ -1,49 +1,44 @@
-declare const process: {
-  env: Record<string, string | undefined>;
-};
+import type { LLMProvider, LLMMessage, LLMConfig, LLMResponse, StreamCallback } from './providers/LLMProvider';
+import { ProviderFactory } from './providers/ProviderFactory';
 
-export interface LLMMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-export interface LLMConfig {
-  model: string;
-  temperature?: number;
-  maxTokens?: number;
-  apiKey?: string;
-  baseURL?: string;
-}
-
-export interface LLMResponse {
-  content: string;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
-}
-
-export type StreamCallback = (chunk: string) => void;
+export type { LLMMessage, LLMConfig, LLMResponse, StreamCallback };
 
 /**
- * LLMService - 大语言模型服务封装
- * 使用 OpenAI 兼容的 API 格式
+ * LLMService - 统一的大语言模型服务
+ * 支持多提供商：OpenAI, Claude, DeepSeek, Moonshot, 等
+ * 
+ * 使用示例：
+ * ```typescript
+ * // 方式1: 使用默认 Provider (从环境变量)
+ * const service = new LLMService();
+ * 
+ * // 方式2: 指定 Provider
+ * const service = new LLMService('claude', {
+ *   apiKey: 'your-claude-key',
+ *   defaultModel: 'claude-3-sonnet-20240229'
+ * });
+ * 
+ * // 方式3: 传入自定义 Provider
+ * const service = new LLMService(customProvider);
+ * ```
  */
 export class LLMService {
-  private apiKey: string;
-  private baseURL: string;
-  private defaultConfig: Omit<LLMConfig, 'apiKey' | 'baseURL'>;
+  private provider: LLMProvider;
 
-  constructor(config?: LLMConfig) {
-    this.apiKey = config?.apiKey || process.env.OPENAI_API_KEY || '';
-    this.baseURL = config?.baseURL || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-    
-    this.defaultConfig = {
-      model: config?.model || 'gpt-4o-mini',
-      temperature: config?.temperature ?? 0.7,
-      maxTokens: config?.maxTokens || 2000,
-    };
+  constructor();
+  constructor(provider: LLMProvider);
+  constructor(type: string, config: { apiKey: string; baseURL?: string; defaultModel?: string });
+  constructor(arg1?: LLMProvider | string, arg2?: { apiKey: string; baseURL?: string; defaultModel?: string }) {
+    if (arg1 && typeof arg1 !== 'string') {
+      // 直接传入 Provider 实例
+      this.provider = arg1;
+    } else if (arg1 && arg2) {
+      // 传入类型和配置
+      this.provider = ProviderFactory.createProvider(arg1 as any, arg2);
+    } else {
+      // 从环境变量创建
+      this.provider = ProviderFactory.createFromEnv();
+    }
   }
 
   /**
@@ -53,46 +48,12 @@ export class LLMService {
     messages: LLMMessage[],
     config?: Partial<LLMConfig>
   ): Promise<LLMResponse> {
-    const mergedConfig = { ...this.defaultConfig, ...config };
-    
-    try {
-      const response = await fetch(`${this.baseURL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: mergedConfig.model,
-          messages: messages.map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
-          temperature: mergedConfig.temperature,
-          max_tokens: mergedConfig.maxTokens,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`API error: ${response.status} - ${error}`);
-      }
-
-      const data = await response.json();
-      const choice = data.choices[0];
-      
-      return {
-        content: choice.message.content || '',
-        usage: data.usage ? {
-          promptTokens: data.usage.prompt_tokens,
-          completionTokens: data.usage.completion_tokens,
-          totalTokens: data.usage.total_tokens,
-        } : undefined,
-      };
-    } catch (error) {
-      console.error('LLM chat error:', error);
-      throw new Error(`LLM request failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    return this.provider.chat({
+      model: config?.model || 'gpt-4o-mini',
+      messages,
+      temperature: config?.temperature ?? 0.7,
+      maxTokens: config?.maxTokens || 2000,
+    });
   }
 
   /**
@@ -103,73 +64,15 @@ export class LLMService {
     onChunk: StreamCallback,
     config?: Partial<LLMConfig>
   ): Promise<LLMResponse> {
-    const mergedConfig = { ...this.defaultConfig, ...config };
-    
-    try {
-      const response = await fetch(`${this.baseURL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: mergedConfig.model,
-          messages: messages.map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
-          temperature: mergedConfig.temperature,
-          max_tokens: mergedConfig.maxTokens,
-          stream: true,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`API error: ${response.status} - ${error}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body');
-      }
-
-      let fullContent = '';
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim() !== '');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
-
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices[0]?.delta?.content || '';
-              if (content) {
-                fullContent += content;
-                onChunk(content);
-              }
-            } catch {
-              // 忽略解析错误
-            }
-          }
-        }
-      }
-
-      return {
-        content: fullContent,
-      };
-    } catch (error) {
-      console.error('LLM stream error:', error);
-      throw new Error(`LLM stream failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    return this.provider.chatStream(
+      {
+        model: config?.model || 'gpt-4o-mini',
+        messages,
+        temperature: config?.temperature ?? 0.7,
+        maxTokens: config?.maxTokens || 2000,
+      },
+      onChunk
+    );
   }
 
   /**
@@ -182,7 +85,21 @@ export class LLMService {
     );
     return response.content;
   }
+
+  /**
+   * 获取当前 Provider 信息
+   */
+  getProvider(): LLMProvider {
+    return this.provider;
+  }
+
+  /**
+   * 验证配置是否有效
+   */
+  async validate(): Promise<boolean> {
+    return this.provider.validateConfig();
+  }
 }
 
-// 导出单例
+// 导出单例（从环境变量初始化）
 export const llmService = new LLMService();
