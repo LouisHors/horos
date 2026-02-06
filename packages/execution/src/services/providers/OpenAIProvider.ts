@@ -13,7 +13,7 @@ import {
  * (如: DeepSeek, Moonshot, Qwen, 等)
  */
 export class OpenAIProvider implements LLMProvider {
-  readonly name = 'OpenAI';
+  readonly name: string;
   readonly capabilities: LLMCapabilities = {
     streaming: true,
     functionCalling: true,
@@ -23,11 +23,21 @@ export class OpenAIProvider implements LLMProvider {
 
   private config: ProviderConfig;
 
-  constructor(config: ProviderConfig) {
+  constructor(config: ProviderConfig, name?: string) {
     this.config = {
       timeout: 30000,
       ...config,
     };
+    // 根据 baseURL 自动识别名称
+    this.name = name || this.detectProviderName(config.baseURL);
+  }
+
+  private detectProviderName(baseURL?: string): string {
+    if (!baseURL) return 'OpenAI';
+    if (baseURL.includes('moonshot')) return 'Moonshot';
+    if (baseURL.includes('deepseek')) return 'DeepSeek';
+    if (baseURL.includes('openai')) return 'OpenAI';
+    return 'Custom';
   }
 
   async chat(request: LLMRequest): Promise<LLMResponse> {
