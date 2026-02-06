@@ -40,7 +40,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   {
     type: 'moonshot',
     name: 'Moonshot (Kimi)',
-    defaultBaseURL: 'https://api.kimi.com/coding/',
+    defaultBaseURL: 'https://api.moonshot.cn/v1',
     defaultModel: 'kimi-coding',
     requireApiKey: true,
   },
@@ -83,8 +83,8 @@ export class ProviderFactory {
   static createFromEnv(): LLMProvider {
     const type = (process.env.LLM_PROVIDER as ProviderType) || 'moonshot';
     const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '';
-    const baseURL = process.env.LLM_BASE_URL || 'https://api.kimi.com/coding/';
-    const defaultModel = process.env.LLM_MODEL || 'kimi-coding';
+    const baseURL = process.env.LLM_BASE_URL || 'https://api.moonshot.cn/v1';
+    const defaultModel = process.env.LLM_MODEL || 'kimi-latest';
 
     if (!apiKey) {
       throw new Error('LLM API Key not found. Set LLM_API_KEY or OPENAI_API_KEY environment variable.');

@@ -9,7 +9,7 @@ async function testKimi() {
   const service = new LLMService();
   
   console.log('Provider:', service.getProvider().name);
-  console.log('模型: kimi-coding (默认)');
+  console.log('模型: kimi-latest (默认)');
   console.log('问题: 什么是工作流编排？\n');
   console.log('🤖 Kimi 回复:\n');
 
@@ -32,10 +32,15 @@ async function testKimi() {
     }
     
     console.log('\n✅ 测试成功！Kimi 运行正常');
+    console.log('\n💡 提示: 如需使用 kimi-coding 模型，请确保有对应权限');
+    console.log('   export LLM_MODEL="kimi-coding"');
   } catch (error) {
     console.error('❌ 测试失败:', error.message);
-    if (error.message.includes('401')) {
-      console.error('\n💡 提示: API Key 可能无效或已过期');
+    if (error.message.includes('403') && error.message.includes('Coding')) {
+      console.error('\n💡 kimi-coding 模型需要特殊权限');
+      console.error('   使用默认模型: export LLM_MODEL="kimi-latest"');
+    } else if (error.message.includes('401')) {
+      console.error('\n💡 API Key 无效或已过期');
     }
   }
 }
