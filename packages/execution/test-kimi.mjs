@@ -37,11 +37,18 @@ async function testKimi() {
   } catch (error) {
     console.error('❌ 测试失败:', error.message);
     if (error.message.includes('403') && error.message.includes('Coding')) {
-      console.error('\n💡 kimi-coding 模型需要特殊权限');
-      console.error('   使用默认模型: export LLM_MODEL="kimi-latest"');
+      console.error('\n💡 调试建议:');
+      console.error('   1. 确认 Key 已开通 Kimi Code 权限');
+      console.error('   2. 在 Roo Code 中抓包查看实际请求头');
+      console.error('   3. 或使用标准模型: export LLM_MODEL="kimi-latest"');
     } else if (error.message.includes('401')) {
-      console.error('\n💡 API Key 无效或已过期');
+      console.error('\n💡 API Key 可能无效');
     }
+    console.error('\n📋 请检查 Roo Code 中的网络请求，对比以下 curl:');
+    console.error('   curl -X POST https://api.kimi.com/coding/v1/chat/completions \\\\');
+    console.error('     -H "Authorization: Bearer $LLM_API_KEY" \\\\');
+    console.error('     -H "Content-Type: application/json" \\\\');
+    console.error('     -d \'{"model":"kimi-for-coding","messages":[{"role":"user","content":"Hello"}]}\'');
   }
 }
 
