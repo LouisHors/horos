@@ -8,6 +8,7 @@ export interface ProviderInfo {
   type: ProviderType;
   name: string;
   defaultBaseURL: string;
+  defaultModel: string;
   requireApiKey: boolean;
 }
 
@@ -19,30 +20,35 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
     type: 'openai',
     name: 'OpenAI',
     defaultBaseURL: 'https://api.openai.com/v1',
+    defaultModel: 'gpt-4o',
     requireApiKey: true,
   },
   {
     type: 'claude',
     name: 'Claude (Anthropic)',
     defaultBaseURL: 'https://api.anthropic.com/v1',
+    defaultModel: 'claude-3-5-sonnet-20241022',
     requireApiKey: true,
   },
   {
     type: 'deepseek',
     name: 'DeepSeek',
     defaultBaseURL: 'https://api.deepseek.com/v1',
+    defaultModel: 'deepseek-chat',
     requireApiKey: true,
   },
   {
     type: 'moonshot',
     name: 'Moonshot (Kimi)',
     defaultBaseURL: 'https://api.moonshot.cn/v1',
+    defaultModel: 'kimi-coding',
     requireApiKey: true,
   },
   {
     type: 'custom',
     name: '自定义 (OpenAI 兼容)',
     defaultBaseURL: '',
+    defaultModel: 'gpt-4o',
     requireApiKey: true,
   },
 ];
@@ -72,12 +78,13 @@ export class ProviderFactory {
 
   /**
    * 从环境变量创建 Provider
+   * 默认使用 Moonshot Kimi 模型
    */
   static createFromEnv(): LLMProvider {
-    const type = (process.env.LLM_PROVIDER as ProviderType) || 'openai';
+    const type = (process.env.LLM_PROVIDER as ProviderType) || 'moonshot';
     const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '';
-    const baseURL = process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL;
-    const defaultModel = process.env.LLM_MODEL || 'gpt-4o-mini';
+    const baseURL = process.env.LLM_BASE_URL || 'https://api.moonshot.cn/v1';
+    const defaultModel = process.env.LLM_MODEL || 'kimi-coding';
 
     if (!apiKey) {
       throw new Error('LLM API Key not found. Set LLM_API_KEY or OPENAI_API_KEY environment variable.');
