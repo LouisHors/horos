@@ -49,7 +49,7 @@ export class LLMService {
     config?: Partial<LLMConfig>
   ): Promise<LLMResponse> {
     return this.provider.chat({
-      model: config?.model || 'kimi-for-coding',
+      model: config?.model || 'GLM-4.7',
       messages,
       temperature: config?.temperature ?? 0.7,
       maxTokens: config?.maxTokens || 2000,
@@ -66,7 +66,7 @@ export class LLMService {
   ): Promise<LLMResponse> {
     return this.provider.chatStream(
       {
-        model: config?.model || 'kimi-for-coding',
+        model: config?.model || 'GLM-4.7',
         messages,
         temperature: config?.temperature ?? 0.7,
         maxTokens: config?.maxTokens || 2000,

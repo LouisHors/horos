@@ -34,6 +34,7 @@ export class OpenAIProvider implements LLMProvider {
 
   private detectProviderName(baseURL?: string): string {
     if (!baseURL) return 'OpenAI';
+    if (baseURL.includes('bigmodel')) return 'Zhipu AI';
     if (baseURL.includes('kimi')) return 'Moonshot';
     if (baseURL.includes('moonshot')) return 'Moonshot';
     if (baseURL.includes('deepseek')) return 'DeepSeek';
