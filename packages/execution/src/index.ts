@@ -8,6 +8,13 @@ export { ExecutionScheduler } from './core/ExecutionScheduler';
 
 // Executors
 export { NodeExecutor } from './executors/NodeExecutor';
+export { AgentNodeExecutor } from './executors/AgentNodeExecutor';
+export { ToolNodeExecutor } from './executors/ToolNodeExecutor';
+export { ConditionExecutor } from './executors/ConditionExecutor';
+
+// Services
+export { LLMService, llmService } from './services/LLMService';
+export type { LLMMessage, LLMConfig, LLMResponse, StreamCallback } from './services/LLMService';
 
 // Checkpoint
 export { CheckpointManager } from './checkpoint/CheckpointManager';
