@@ -2,7 +2,7 @@ import { LLMProvider, ProviderConfig } from './LLMProvider';
 import { OpenAIProvider } from './OpenAIProvider';
 import { ClaudeProvider } from './ClaudeProvider';
 
-export type ProviderType = 'openai' | 'claude' | 'deepseek' | 'moonshot' | 'custom';
+export type ProviderType = 'openai' | 'claude' | 'deepseek' | 'moonshot' | 'zhipu' | 'custom';
 
 export interface ProviderInfo {
   type: ProviderType;
@@ -45,6 +45,13 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
     requireApiKey: true,
   },
   {
+    type: 'zhipu',
+    name: 'Zhipu AI (智谱)',
+    defaultBaseURL: 'https://open.bigmodel.cn/api/coding/paas/v4',
+    defaultModel: 'GLM-4.7',
+    requireApiKey: true,
+  },
+  {
     type: 'custom',
     name: '自定义 (OpenAI 兼容)',
     defaultBaseURL: '',
@@ -68,6 +75,7 @@ export class ProviderFactory {
         return new ClaudeProvider(config);
       case 'deepseek':
       case 'moonshot':
+      case 'zhipu':
       case 'custom':
         // 这些提供商都兼容 OpenAI API 格式
         return new OpenAIProvider(config);
@@ -81,15 +89,27 @@ export class ProviderFactory {
    * 默认使用 Moonshot Kimi 模型
    */
   static createFromEnv(): LLMProvider {
+    console.log('[ProviderFactory] 🔧 从环境变量创建 Provider...');
     const type = (process.env.LLM_PROVIDER as ProviderType) || 'moonshot';
     const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '';
     const baseURL = process.env.LLM_BASE_URL || 'https://open.bigmodel.cn/api/coding/paas/v4';
     const defaultModel = process.env.LLM_MODEL || 'GLM-4.7';
+    
+    console.log('[ProviderFactory] 📊 环境变量:', { 
+      type, 
+      hasApiKey: !!apiKey, 
+      apiKeyLength: apiKey.length,
+      baseURL, 
+      defaultModel,
+      env: typeof process !== 'undefined' ? 'defined' : 'undefined'
+    });
 
     if (!apiKey) {
+      console.error('[ProviderFactory] ❌ API Key 未找到');
       throw new Error('LLM API Key not found. Set LLM_API_KEY or OPENAI_API_KEY environment variable.');
     }
 
+    console.log('[ProviderFactory] ✅ 创建 Provider:', type);
     return this.createProvider(type, {
       apiKey,
       baseURL,

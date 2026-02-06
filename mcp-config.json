@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "node",
+      "args": [
+        "/Users/zego/Demo_Hors/horos/chrome-devtools-mcp/build/src/index.js",
+        "--no-usage-statistics"
+      ]
+    }
+  }
+}

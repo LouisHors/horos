@@ -42,9 +42,11 @@ export class ExecutionBridge {
   private _status: ExecutionStatus = 'idle';
 
   constructor(callbacks: ExecutionBridgeCallbacks = {}) {
+    console.log('[ExecutionBridge] 🔨 创建实例');
     this.callbacks = callbacks;
     this.engine = new ExecutionEngine();
     this.setupEventListeners();
+    console.log('[ExecutionBridge] ✅ 初始化完成');
   }
 
   /**
@@ -72,15 +74,20 @@ export class ExecutionBridge {
    * 启动执行
    */
   async start(nodes: Node<NodeData>[], edges: Edge[]): Promise<ExecutionResult> {
+    console.log('[ExecutionBridge] 🚀 start()', { nodeCount: nodes.length, edgeCount: edges.length });
     this.resetState();
     this.setStatus('running');
 
     // 转换 ReactFlow 节点/边为执行引擎格式
+    console.log('[ExecutionBridge] 📝 转换节点和边...');
     const workflowNodes = this.convertNodes(nodes);
     const workflowEdges = this.convertEdges(edges);
+    console.log('[ExecutionBridge] 📊 转换完成', { workflowNodeCount: workflowNodes.length, workflowEdgeCount: workflowEdges.length });
 
     try {
+      console.log('[ExecutionBridge] ⚙️ 调用引擎执行...');
       const result = await this.engine.execute(workflowNodes, workflowEdges);
+      console.log('[ExecutionBridge] ✅ 引擎执行完成', { success: result.success, duration: result.duration });
       
       if (result.success) {
         this.setStatus('completed');
@@ -91,6 +98,7 @@ export class ExecutionBridge {
       this.callbacks.onExecutionComplete?.(result);
       return result;
     } catch (error) {
+      console.error('[ExecutionBridge] ❌ 执行失败:', error);
       this.setStatus('failed');
       this.callbacks.onExecutionError?.(error as Error);
       throw error;
@@ -185,6 +193,7 @@ export class ExecutionBridge {
    * 设置执行状态
    */
   private setStatus(status: ExecutionStatus): void {
+    console.log('[ExecutionBridge] 📊 状态变更:', status);
     this._status = status;
     this.callbacks.onStatusChange?.(status);
   }
@@ -193,12 +202,17 @@ export class ExecutionBridge {
    * 转换 ReactFlow 节点为工作流节点
    */
   private convertNodes(nodes: Node<NodeData>[]): WorkflowNode[] {
-    return nodes.map(node => ({
-      id: node.id,
-      type: this.mapNodeType(node.type || 'default'),
-      data: node.data || {},
-      position: node.position,
-    }));
+    console.log('[ExecutionBridge] 📝 转换', nodes.length, '个节点');
+    return nodes.map(node => {
+      const mapped = {
+        id: node.id,
+        type: this.mapNodeType(node.type || 'default'),
+        data: node.data || {},
+        position: node.position,
+      };
+      console.log('[ExecutionBridge]   →', node.id, '=>', mapped.type);
+      return mapped;
+    });
   }
 
   /**

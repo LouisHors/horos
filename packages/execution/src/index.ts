@@ -8,6 +8,8 @@ export { ExecutionScheduler } from './core/ExecutionScheduler';
 
 // Executors
 export { NodeExecutor } from './executors/NodeExecutor';
+export { StartNodeExecutor } from './executors/StartNodeExecutor';
+export { EndNodeExecutor } from './executors/EndNodeExecutor';
 export { AgentNodeExecutor } from './executors/AgentNodeExecutor';
 export { ToolNodeExecutor } from './executors/ToolNodeExecutor';
 export { ConditionExecutor } from './executors/ConditionExecutor';

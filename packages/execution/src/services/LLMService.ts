@@ -29,16 +29,21 @@ export class LLMService {
   constructor(provider: LLMProvider);
   constructor(type: string, config: { apiKey: string; baseURL?: string; defaultModel?: string });
   constructor(arg1?: LLMProvider | string, arg2?: { apiKey: string; baseURL?: string; defaultModel?: string }) {
+    console.log('[LLMService] 🔨 初始化...');
     if (arg1 && typeof arg1 !== 'string') {
       // 直接传入 Provider 实例
       this.provider = arg1;
+      console.log('[LLMService] ✅ 使用传入的 Provider');
     } else if (arg1 && arg2) {
       // 传入类型和配置
+      console.log('[LLMService] 🔧 从参数创建 Provider:', arg1);
       this.provider = ProviderFactory.createProvider(arg1 as any, arg2);
     } else {
       // 从环境变量创建
+      console.log('[LLMService] 🔧 从环境变量创建 Provider');
       this.provider = ProviderFactory.createFromEnv();
     }
+    console.log('[LLMService] ✅ Provider:', this.provider.name);
   }
 
   /**
@@ -48,12 +53,21 @@ export class LLMService {
     messages: LLMMessage[],
     config?: Partial<LLMConfig>
   ): Promise<LLMResponse> {
-    return this.provider.chat({
-      model: config?.model || 'GLM-4.7',
-      messages,
-      temperature: config?.temperature ?? 0.7,
-      maxTokens: config?.maxTokens || 2000,
-    });
+    const model = config?.model || 'GLM-4.7';
+    console.log('[LLMService] 💬 chat()', { model, msgCount: messages.length });
+    try {
+      const result = await this.provider.chat({
+        model,
+        messages,
+        temperature: config?.temperature ?? 0.7,
+        maxTokens: config?.maxTokens || 2000,
+      });
+      console.log('[LLMService] ✅ chat() 成功', { contentLength: result.content.length });
+      return result;
+    } catch (err) {
+      console.error('[LLMService] ❌ chat() 失败:', err);
+      throw err;
+    }
   }
 
   /**
@@ -79,6 +93,7 @@ export class LLMService {
    * 简单完成（单轮对话）
    */
   async complete(prompt: string, config?: Partial<LLMConfig>): Promise<string> {
+    console.log('[LLMService] 📝 complete()', { promptLength: prompt.length });
     const response = await this.chat(
       [{ role: 'user', content: prompt }],
       config
@@ -101,5 +116,24 @@ export class LLMService {
   }
 }
 
-// 导出单例（从环境变量初始化）
-export const llmService = new LLMService();
+// 延迟初始化的单例 - 避免浏览器端模块加载时出错
+let _llmService: LLMService | null = null;
+
+export const llmService = new Proxy({} as LLMService, {
+  get(_, prop) {
+    if (!_llmService) {
+      console.log('[LLMService] 🔄 延迟初始化单例');
+      _llmService = new LLMService();
+    }
+    return (_llmService as any)[prop];
+  }
+});
+
+// 兼容直接访问的 getter
+export function getLLMService(): LLMService {
+  if (!_llmService) {
+    console.log('[LLMService] 🔄 延迟初始化单例 (getLLMService)');
+    _llmService = new LLMService();
+  }
+  return _llmService;
+}

@@ -6,6 +6,9 @@ import {
 import { WorkflowParser } from './WorkflowParser';
 import { ExecutionScheduler } from './ExecutionScheduler';
 import { NodeExecutor } from '../executors/NodeExecutor';
+import { StartNodeExecutor } from '../executors/StartNodeExecutor';
+import { EndNodeExecutor } from '../executors/EndNodeExecutor';
+import { AgentNodeExecutor } from '../executors/AgentNodeExecutor';
 
 type EventHandler = (data: unknown) => void;
 
@@ -20,8 +23,18 @@ export class ExecutionEngine {
   private eventHandlers: Map<string, EventHandler[]> = new Map();
 
   constructor() {
+    console.log('[ExecutionEngine] 🔨 创建实例');
     this.parser = new WorkflowParser();
     this.scheduler = new ExecutionScheduler({ maxParallelism: 5 });
+    
+    // 注册默认节点执行器
+    console.log('[ExecutionEngine] 🔧 注册节点执行器...');
+    this.registerExecutor('start', new StartNodeExecutor());
+    this.registerExecutor('end', new EndNodeExecutor());
+    this.registerExecutor('agent', new AgentNodeExecutor());
+    console.log('[ExecutionEngine] ✅ 节点执行器注册完成');
+    
+    console.log('[ExecutionEngine] ✅ 初始化完成');
   }
 
   /**
@@ -37,10 +50,13 @@ export class ExecutionEngine {
   async execute(nodes: WorkflowNode[], edges: WorkflowEdge[]): Promise<ExecutionResult> {
     const executionId = `exec_${Date.now()}`;
     const startTime = Date.now();
+    console.log('[ExecutionEngine] 🚀 execute()', { executionId, nodeCount: nodes.length, edgeCount: edges.length });
 
     try {
       // 解析 DAG
+      console.log('[ExecutionEngine] 📝 解析 DAG...');
       const dag = this.parser.parseWorkflow(nodes, edges);
+      console.log('[ExecutionEngine] 📊 DAG 解析完成', { nodeCount: dag.nodes.length, executionOrder: dag.executionOrder });
 
       // 初始化执行上下文
       const context: ExecutionContext = {
@@ -65,10 +81,12 @@ export class ExecutionEngine {
       this.emit('start', { executionId });
 
       // 调度执行
+      console.log('[ExecutionEngine] ⚙️ 开始调度执行...');
       await this.scheduler.scheduleExecution(dag, this, context);
+      console.log('[ExecutionEngine] ✅ 调度执行完成');
 
       // 构建结果
-      return {
+      const result = {
         success: true,
         executionId,
         status: 'completed',
@@ -76,7 +94,10 @@ export class ExecutionEngine {
         errors: [],
         duration: Date.now() - startTime,
       };
+      console.log('[ExecutionEngine] 🎉 执行成功', { duration: result.duration, outputCount: result.outputs.size });
+      return result;
     } catch (error) {
+      console.error('[ExecutionEngine] ❌ 执行失败:', error);
       return {
         success: false,
         executionId,
@@ -96,17 +117,26 @@ export class ExecutionEngine {
    * 执行单个节点
    */
   async executeNode(nodeId: string, dag: DAG, context: ExecutionContext): Promise<unknown> {
+    console.log('[ExecutionEngine] ▶️ executeNode()', nodeId);
     const node = dag.nodes.find(n => n.id === nodeId);
-    if (!node) throw new Error(`Node not found: ${nodeId}`);
+    if (!node) {
+      console.error('[ExecutionEngine] ❌ 节点未找到:', nodeId);
+      throw new Error(`Node not found: ${nodeId}`);
+    }
+    console.log('[ExecutionEngine] 📋 节点信息', { type: node.type, data: node.data });
 
     this.emit('progress', { nodeId, status: 'running' });
 
     const executor = this.executors.get(node.type);
     if (!executor) {
+      console.error('[ExecutionEngine] ❌ 无执行器:', node.type);
       throw new Error(`No executor for node type: ${node.type}`);
     }
+    console.log('[ExecutionEngine] 🔧 找到执行器:', node.type);
 
+    console.log('[ExecutionEngine] ⚙️ 执行节点...');
     const result = await executor.execute(node, context, this);
+    console.log('[ExecutionEngine] ✅ 节点执行完成:', nodeId, { result });
     context.nodeOutputs.set(nodeId, result);
 
     // 更新状态

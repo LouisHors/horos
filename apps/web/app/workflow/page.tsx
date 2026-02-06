@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -42,7 +42,7 @@ const initialNodes: Node[] = [
     position: { x: 250, y: 200 },
     data: {
       label: 'AI Agent',
-      model: 'gpt-4o-mini',
+      model: 'GLM-4.7',
       temperature: 0.7,
       systemPrompt: 'You are a helpful assistant.',
     },
@@ -84,17 +84,25 @@ export default function WorkflowPage() {
   );
 
   const handleRun = async () => {
+    console.log('[Workflow] 🚀 开始执行工作流', { nodeCount: nodes.length, edgeCount: edges.length });
     setShowResult(true);
-    await start(nodes, edges);
+    try {
+      await start(nodes, edges);
+      console.log('[Workflow] ✅ 工作流执行完成');
+    } catch (err) {
+      console.error('[Workflow] ❌ 工作流执行失败:', err);
+    }
   };
 
   const handleAddNode = (type: string) => {
+    const id = `${type}-${Date.now()}`;
     const newNode: Node = {
-      id: `${type}-${Date.now()}`,
+      id,
       type,
       position: { x: Math.random() * 300 + 100, y: Math.random() * 300 + 100 },
       data: { label: type.charAt(0).toUpperCase() + type.slice(1) },
     };
+    console.log('[Workflow] ➕ 添加节点:', { id, type, position: newNode.position });
     setNodes((nds) => [...nds, newNode]);
   };
 
@@ -106,6 +114,23 @@ export default function WorkflowPage() {
       executionStatus: nodeStates.get(node.id)?.status,
     },
   }));
+
+  // Debug 日志
+  useEffect(() => {
+    console.log('[Workflow] 📊 状态更新:', { status, nodeCount: nodes.length, isRunning });
+  }, [status, nodes.length, isRunning]);
+
+  useEffect(() => {
+    if (error) {
+      console.error('[Workflow] ❌ 执行错误:', error);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (result) {
+      console.log('[Workflow] 📋 执行结果:', result);
+    }
+  }, [result]);
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -125,9 +150,9 @@ export default function WorkflowPage() {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex">
+      <div style={{ height: 'calc(100vh - 64px)', display: 'flex' }}>
         {/* Node Library */}
-        <div className="w-64 bg-white border-r p-4">
+        <div className="w-64 bg-white border-r p-4 overflow-y-auto flex-shrink-0">
           <h2 className="text-sm font-medium text-gray-500 uppercase mb-4">
             Node Library
           </h2>
@@ -149,8 +174,8 @@ export default function WorkflowPage() {
           </div>
         </div>
 
-        {/* Canvas */}
-        <div className="flex-1 relative">
+        {/* Canvas - 必须有明确宽高 */}
+        <div style={{ flex: 1, position: 'relative', minWidth: 0, minHeight: 0 }}>
           <ReactFlow
             nodes={nodesWithStatus}
             edges={edges}
@@ -159,6 +184,7 @@ export default function WorkflowPage() {
             onConnect={onConnect}
             nodeTypes={nodeTypes}
             fitView
+            style={{ width: '100%', height: '100%' }}
           >
             <Background />
             <Controls />
@@ -197,7 +223,7 @@ export default function WorkflowPage() {
 
                 {/* Node Outputs */}
                 <div className="space-y-3">
-                  {Array.from(result.results.entries()).map(
+                  {result.outputs && Object.entries(result.outputs).map(
                     ([nodeId, output]) => (
                       <div
                         key={nodeId}
@@ -211,6 +237,11 @@ export default function WorkflowPage() {
                         </pre>
                       </div>
                     )
+                  )}
+                  {!result.outputs || Object.keys(result.outputs).length === 0 && (
+                    <div className="text-sm text-gray-500">
+                      执行完成，暂无详细输出
+                    </div>
                   )}
                 </div>
               </div>
