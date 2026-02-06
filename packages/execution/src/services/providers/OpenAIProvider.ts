@@ -47,6 +47,7 @@ export class OpenAIProvider implements LLMProvider {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.config.apiKey}`,
+        'User-Agent': 'Claude-Code/0.1.0', // Kimi Code 需要 Coding Agent 标识
       },
       body: JSON.stringify({
         model: request.model,
@@ -74,6 +75,7 @@ export class OpenAIProvider implements LLMProvider {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.config.apiKey}`,
+        'User-Agent': 'Claude-Code/0.1.0', // Kimi Code 需要 Coding Agent 标识
       },
       body: JSON.stringify({
         model: request.model,
