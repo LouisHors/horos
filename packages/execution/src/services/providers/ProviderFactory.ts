@@ -84,7 +84,7 @@ export class ProviderFactory {
     const type = (process.env.LLM_PROVIDER as ProviderType) || 'moonshot';
     const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || '';
     const baseURL = process.env.LLM_BASE_URL || 'https://api.moonshot.cn/v1';
-    const defaultModel = process.env.LLM_MODEL || 'kimi-latest';
+    const defaultModel = process.env.LLM_MODEL || 'kimi-k2.5';
 
     if (!apiKey) {
       throw new Error('LLM API Key not found. Set LLM_API_KEY or OPENAI_API_KEY environment variable.');

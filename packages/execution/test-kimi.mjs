@@ -9,7 +9,7 @@ async function testKimi() {
   const service = new LLMService();
   
   console.log('Provider:', service.getProvider().name);
-  console.log('模型: kimi-latest (默认)');
+  console.log('模型: kimi-k2.5 (默认 - Kimi迄今最智能模型)');
   console.log('问题: 什么是工作流编排？\n');
   console.log('🤖 Kimi 回复:\n');
 
